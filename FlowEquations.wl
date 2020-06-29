@@ -8,7 +8,7 @@
 (*Functional Approach within Local Potential Approximation*)
 
 
-(* ::Section:: *)
+(* ::Section::Closed:: *)
 (*Initialization*)
 
 
@@ -34,6 +34,7 @@ For[i = 1, i<=Length[arguments], i++,
 			anisotropySymmetry = "ON";
 			n\[Tau] = 0,
 			ON = False;
+			n=2;
 			anisotropySymmetry = ToExpression[arguments[[i+1]]]]];
 	If[arguments[[i]] == "phi", n\[Phi] = ToExpression[arguments[[i+1]]]];
 	If[arguments[[i]] == "tau", n\[Tau] = ToExpression[arguments[[i+1]]]];
@@ -56,7 +57,7 @@ If[n\[Tau] == Null,
 If[fail, Quit[]];
 
 
-(*n\[Phi]=0; n\[Tau]=0; ON=True; anisotropySymmetry="ON";*)
+(*n\[Phi]=0; n\[Tau]=0; ON=False; anisotropySymmetry=4;*)
 
 
 (* ::Section:: *)
@@ -103,13 +104,14 @@ If[anisotropySymmetry == 6,
 varRep = Table[repExpressions[[i]] -> FullSimplify[repExpressions[[i]] /. disentangled, Assumptions -> VariablesRange], {i, 1, Length[repExpressions]}]; 
 
 
-(* ::Subsection::Closed:: *)
+(* ::Subsection:: *)
 (*Effective action (function of \[Rho] and \[Tau])*)
 
 
 If[ON,
 \[CapitalGamma]:= int[U[\[Rho][x],\[Tau][x]] + (Z[\[Rho][x]]-2 \[Rho][m, x] Y[\[Rho][x]])/2  Sum[D[m[i][x], x]^2, {i, 1, 3}] + Y[\[Rho][x]]/2 (Sum[m[i][x] D[m[i][x], x], {i, 1, 3}])^2, x],
-\[CapitalGamma]:= int[U[\[Rho][x],\[Tau][x]] + (Z[\[Rho][x]]-2 \[Rho][m, x] Y[\[Rho][x]])/2  Sum[D[m[i][x], x]^2, {i, 1, 2}] + Y[\[Rho][x]]/2 (Sum[m[i][x] D[m[i][x], x], {i, 1, 2}])^2, x]
+\[CapitalGamma]:= int[U[\[Rho][x],\[Tau][x]] + (Z[\[Rho][x]]-2 \[Rho][m, x] Y[\[Rho][x]])/2  Sum[D[m[i][x], x]^2, {i, 1, 2}] 
+	+ Y[\[Rho][x]]/2 (Sum[m[i][x] D[m[i][x], x], {i, 1, 2}])^2 + T[\[Rho][x]]m[1][x]m[2][x] D[m[1][x],x]D[m[2][x],x], x]
 ]
 
 
@@ -214,7 +216,7 @@ MultilineFunction->None]\)[\[Rho]_, \[Tau]_] -> 0, \[Tau] -> 0}]&
 EvAt\[Rho]0 := (SeriesCoefficient[# /. \[Tau] -> 0, {\[Rho], 0, 0}])&
 
 
-(* ::Section::Closed:: *)
+(* ::Section:: *)
 (*Definitions of Functionals*)
 
 
@@ -339,25 +341,28 @@ fder[DDelta'[x_], m_[y_]] := 0
 fder[DDelta''[x_], m_[y_]] := 0  
 
 
-(* ::Section::Closed:: *)
+(* ::Section:: *)
 (*Correlation Functions*)
 
 
-(* ::Subsubsection:: *)
+(* ::Subsubsection::Closed:: *)
 (*Superscript["\[CapitalGamma]","(2)"] and propagator functions (without DiracDelta)*)
 
 
-raw\[CapitalGamma]2[q_,p_]:=Table[fder[fder[\[CapitalGamma],m[i][q]],m[j][p]],{i,1,3},{j,1,3}];
+If[ON, fieldIndices = 3, fieldIndices = 2];
+
+
+raw\[CapitalGamma]2[q_,p_]:=Table[fder[fder[\[CapitalGamma],m[i][q]],m[j][p]],{i,1,fieldIndices},{j,1,fieldIndices}];
 \[CapitalGamma]2[q_,p_]:=FullSimplify[Clean[{p,q}][raw\[CapitalGamma]2[q,p]]];
-rawG[q_,p_] := Inverse[raw\[CapitalGamma]2[q,p]+{{DDelta[p+q] R[\[Lambda],q^2],0,0},{0,DDelta[p+q] R[\[Lambda],q^2],0},{0,0,DDelta[p+q] R[\[Lambda],q^2]}}]
-G[q_,p_] := Simplify[Inverse[\[CapitalGamma]2[q,p]+{{DDelta[p+q] R[\[Lambda],q^2],0,0},{0,DDelta[p+q] R[\[Lambda],q^2],0},{0,0,DDelta[p+q] R[\[Lambda],q^2]}}]]
+rawG[q_,p_] := Inverse[raw\[CapitalGamma]2[q,p]+DiagonalMatrix[Table[DDelta[p+q] R[\[Lambda],q^2],{i,1,fieldIndices}]]]
+G[q_,p_] := Simplify[Inverse[\[CapitalGamma]2[q,p]+DiagonalMatrix[Table[DDelta[p+q] R[\[Lambda],q^2],{i,1,fieldIndices}]]]]
 
 
 (* ::Subsubsection:: *)
 (*Superscript[\[CapitalGamma],(3)] function*)
 
 
-raw\[CapitalGamma]3[p_,q_,r_] :=Module[{n},Table[fder[raw\[CapitalGamma]2[q,r],m[n][p]],{n,1,3}]];
+raw\[CapitalGamma]3[p_,q_,r_] :=Module[{n},Table[fder[raw\[CapitalGamma]2[q,r],m[n][p]],{n,1,fieldIndices}]];
 \[CapitalGamma]3[p_,q_,r_]:=FullSimplify[Clean[{p,q,r}][raw\[CapitalGamma]3[p,q,r]]];
 
 
@@ -365,7 +370,7 @@ raw\[CapitalGamma]3[p_,q_,r_] :=Module[{n},Table[fder[raw\[CapitalGamma]2[q,r],m
 (*Superscript[\[CapitalGamma],(4)]function*)
 
 
-raw\[CapitalGamma]4[p_,q_,r_,s_] :=Module[{n},Table[fder[raw\[CapitalGamma]3[q,r,s],m[n][p]],{n,1,3}]];
+raw\[CapitalGamma]4[p_,q_,r_,s_] :=Module[{n},Table[fder[raw\[CapitalGamma]3[q,r,s],m[n][p]],{n,1,fieldIndices}]];
 \[CapitalGamma]4[p_,q_,r_,s_]:=FullSimplify[Clean[{p,q,r,s}][raw\[CapitalGamma]4[p,q,r,s]]];
 
 
@@ -377,7 +382,7 @@ raw\[CapitalGamma]4[p_,q_,r_,s_] :=Module[{n},Table[fder[raw\[CapitalGamma]3[q,r
 (*Flow equations*)
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Propagators in minimal configuration*)
 
 
@@ -542,7 +547,7 @@ flowEquations = Drop[Flatten[equationsExpanded,1],1] /. {Subscript[u, i_,j_] /; 
 (*We assume Subscript["\[PartialD]", \[Tau]]Z =0, so equations are evaluated at configuration \[Tau]=0, \[Phi][2]=0.*)
 
 
-(* ::Subsubsection:: *)
+(* ::Subsubsection::Closed:: *)
 (*Vertices in minimal configuration*)
 
 
@@ -606,7 +611,10 @@ AppendTo[flowEquations, ZEquation];
 
 
 If[n\[Phi]==0,
-Ytadpole = Simplify[(tadpole-(-1/2(M\[CapitalGamma]4[[2,2,1,1]] gs^-2 + M\[CapitalGamma]4[[2,2,2,2]] gp^-2 + (n-2) M\[CapitalGamma]4[[2,2,3,3]] gp^-2)))/(2\[Rho])];
+If[ON,
+	Ytadpole = Simplify[(tadpole-(-1/2(M\[CapitalGamma]4[[2,2,1,1]] gs^-2 + M\[CapitalGamma]4[[2,2,2,2]] gp^-2 + (n-2) M\[CapitalGamma]4[[2,2,3,3]] gp^-2)))/(2\[Rho])],
+	Ytadpole = Simplify[(tadpole-(-1/2(M\[CapitalGamma]4[[2,2,1,1]] gs^-2 + M\[CapitalGamma]4[[2,2,2,2]] gp^-2)))/(2\[Rho])]];
+
 YtadpoleDifferentiated = ReplaceProps[lap[Ytadpole, p, q]];
 
 Ybubble = Simplify[(bubble- M\[CapitalGamma]3[[2,2,1]]^2 (gp^-2 (Gs /. q -> q+p)) - M\[CapitalGamma]3[[2,1,2]]^2 (gs^-2(Gp /. q -> q+p)))/(2\[Rho])];
