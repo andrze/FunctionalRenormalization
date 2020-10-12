@@ -4,5 +4,8 @@ ON_*_*
 tasks/*
 *.wdx
 notatki
-
+lowd_*
+tricritical_*
+.old_queue
+*.png
 
