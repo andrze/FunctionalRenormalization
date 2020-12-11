@@ -3,7 +3,7 @@ from sys import argv
 
 mathematica_path = "/opt/Wolfram/Mathematica/12.0.0/Executables/math"
 
-def run(mode, regulator, num_conf):
+def run(mode, regulator, num_conf, additional=""):
 
     
     if mode not in ("tricritical","Z4", "ON", "lowd", "regulator"):
@@ -19,12 +19,16 @@ def run(mode, regulator, num_conf):
         file = open("%s/tasks/%s" %(home,filename), 'w')   
         
         file.write("cd %s\n" % home)
-        file.write("%s -script Run.wl -regulator %s -task %s -conf %i\n" % (mathematica_path, regulator, mode, i))
+        file.write("%s -script Run.wl -regulator %s -task %s -conf %i %s\n" % (mathematica_path, regulator, mode, i, additional))
         file.close()
     
-        command = 'qsub -l mem=8000mb,walltime=240:00:00 %s/tasks/%s' % (home, filename)
+        command = 'qsub -l mem=8000mb,walltime=120:00:00 %s/tasks/%s' % (home, filename)
         print command
         system(command)
 
-run(argv[1],argv[2],int(argv[3]))
+if len(argv) == 4:
+    run(argv[1],argv[2],int(argv[3]))
+elif len(argv) > 4:
+    run(argv[1],argv[2],int(argv[3]),argv[4])
+
 
