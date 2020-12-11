@@ -14,6 +14,10 @@
 
 If[!NumberQ[gridSize],
 	gridSize = 120];
+	
+SetAttributes[gridSize,{Protected,Constant}];
+potentialMinimum = Floor[50/60*gridSize];
+Protect[potentialMinimum];
 
 
 (* ::Text:: *)
@@ -35,10 +39,14 @@ SetAttributes[IntegralConfigurations,{Protected,Constant}]
 
 
 If[!NumberQ[zNormalization],
-	zNormalization = 0];
+	If[LPA,
+		zNormalization = potentialMinimum;
+		zNormalization = 0];
+];	
+SetAttributes[zNormalization,{Protected,Constant}];
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Replacement rules*)
 
 
@@ -128,7 +136,7 @@ MultilineFunction->None]\)[ix_] /; ix==gridSize-1 -> Sum[b2[[k]]*ff[ix-k+2],{k, 
 (* ::Text:: *)
 (*NumericDerivatives - replaces exact derivatives with finite differences*)
 (*ONSymmetry - simplifies equations to ones for the O (N) model*)
-(*LPA - simplifies equations to LPA approximation*)
+(*LPArep - simplifies equations to LPA' approximation*)
 
 
 ONSymmetry = {Subscript[w, i_][\[Rho]_] -> 0, \!\(\*SuperscriptBox[
@@ -138,18 +146,46 @@ RowBox[{"(", "m_", ")"}],
 Derivative],
 MultilineFunction->None]\)[\[Rho]_] -> 0};
 NumericDerivatives := (# //. repderborder //.repder)&
-LPA = {z[\[Rho]_]->1, \!\(\*SuperscriptBox[\(z\), 
+LPArep = {z[\[Rho]_]->1, \!\(\*SuperscriptBox[\(z\), 
 TagBox[
 RowBox[{"(", "i_", ")"}],
 Derivative],
-MultilineFunction->None]\)[\[Rho]_]->0, yy[\[Rho]_]->0, \!\(\*SuperscriptBox[\(yy\), 
+MultilineFunction->None]\)[\[Rho]_]->0, yy[\[Rho]_]->Y, \!\(\*SuperscriptBox[\(yy\), 
 TagBox[
 RowBox[{"(", "i_", ")"}],
 Derivative],
-MultilineFunction->None]\)[\[Rho]_]->0, \[Eta]->0};
+MultilineFunction->None]\)[\[Rho]_]->0, \!\(\*SuperscriptBox[\(t\), 
+TagBox[
+RowBox[{"(", "i_", ")"}],
+Derivative],
+MultilineFunction->None]\)[\[Rho]_]->0, t[\[Rho]_] -> T};
 ConstRep[dim_, \[Rho]max_, alpha_:defaultAlpha] := 
-	{d->N[dim], vd->N[(2.^(-1-dim) \[Pi]^(-dim/2))/Gamma[dim/2]],
+	{d->N[dim], vd->1,
 	eps->\[Rho]max/gridSize, \[Alpha]->alpha, z[zNormalization]->1};
+
+
+(* ::Subsubsection::Closed:: *)
+(*MakeLPA*)
+
+
+(* ::Text:: *)
+(*Yields integrands in LPA' approximation*)
+
+
+MakeLPA[integrands_] := Block[{approximate},
+
+Approximate[func_]:= Block[{approx},
+	If[MatchQ[func[[1]], f_[0]],
+		Return[Null];];
+	If[MatchQ[func[[1]], f_[\[Rho]/eps]],
+		approx = func/.LPArep;
+		If[approx[[1]] == 1, approx[[1]] = Z];
+		Return[approx];
+		];
+	Return[func];
+];
+Return[DeleteCases[Map[Approximate,integrands],Null]];
+];
 
 
 (* ::Subsection::Closed:: *)
@@ -232,7 +268,8 @@ For[i=1, i<=Length[primaryKeys], i++,
 	transposed[pk] = Association[];
 	For[j=1, j<=Length[secondaryKeys], j++,
 		sk = secondaryKeys[[j]];
-		transposed[pk][sk] = association[sk][pk];
+		If[MemberQ[Keys[association[sk]],pk],
+			transposed[pk][sk] = association[sk][pk]];
 		];
 	];
 Return[transposed];
@@ -259,7 +296,7 @@ For[i=1, i<=Length[association], i++,
 	If[Length[rest] == 1, rest = rest[[1]]];
 	newEntry = Association[k->association[[i]]];
 	If[MemberQ[Keys[nested], rest],
-		nested[rest] = Join[nested[rest],newEntry],
+		nested[rest] = KeySort[Join[nested[rest],newEntry],#1>#2&],
 		nested[rest] = newEntry];
 ];
 
@@ -280,8 +317,9 @@ Block[{i, newEntry, nested, key, k, rest},
 
 nested = association;
 While[Length[Keys[nested]]>0 && Length[Keys[nested][[1]]] > 0,
-	nested = KeySort[OneLevelNest[nested],#1<#2&];
+	nested = KeySort[OneLevelNest[nested],#1>#2&];
 ];
+
 Return[nested];
 ];
 
@@ -331,9 +369,24 @@ SelectClosest[assoc_, key_] := Block[{sorted, keys, diffs, pos},
   pos = Position[Abs[diffs], Min[Abs[diffs]]][[1, 1]];
   If[pos > 1 && Sign[diffs[[pos]]]*Sign[diffs[[pos - 1]]] == -1, Return[sorted[[pos]]];];
   If[pos < Length[sorted] && Sign[diffs[[pos]]]*Sign[diffs[[pos + 1]]] == -1, Return[sorted[[pos]]];];
-  If[Abs[diffs[[pos]]] < 0.05, Return[sorted[pos]]];
+  If[Abs[diffs[[pos]]] < 0.05, Return[sorted[[pos]]]];
   Return[Null];
   ]
+
+
+(* ::Subsubsection::Closed:: *)
+(*DropOutliers*)
+
+
+(* ::Text:: *)
+(*Drops keys associated with values outside the specified range*)
+
+
+DropOutliers[assoc_,min_,max_] := Block[{filter, a=Association[]},
+	filter[i_] := If[assoc[[i]]>=min && assoc[[i]]<=max, a[Keys[assoc][[i]]] = assoc[[i]]];
+	Map[filter, Range[Length[assoc]]];
+	Return[a];
+];
 
 
 (* ::Section:: *)
@@ -361,8 +414,8 @@ For[i=1, i<=Length[integrandsList], i++,
 	(* Full flow equation consists of scaling term and integrated term *)
 	equation = scaling + GetIntegral[integrand];
 
-	(* Iteration over \[Rho] grid *)
-	For[j=0, j<=gridSize, j++,
+	
+	eqRep[j_] := Block[{},
 		If[j==0 && MatchQ[function, yy[\[Rho]/eps]],
 			(* If the function is Y[\[Rho]] we have separate expression for the integrand at \[Rho]=0 *)
 			yintegrand[q_] = integrandsList[[i+1, 3]] /. regulatorReplacement /. y -> q;
@@ -377,6 +430,13 @@ For[i=1, i<=Length[integrandsList], i++,
 		AppendTo[equationsList, reppedEquation];
 		AppendTo[parameters, function/. \[Rho] -> j eps];
 	];
+	
+	(* Iteration over \[Rho] grid *)
+	(* If `function` is not a function of \[Rho] but constant then no iteration is performed *)
+	If[MatchQ[function,f_[\[Rho]_]], 
+		Map[eqRep,Range[0,gridSize]],
+		eqRep[zNormalization];
+	];	
 ];
 (* Replaces derivatives with finite differences *)
 equationsList = NumericDerivatives[equationsList];
@@ -420,6 +480,22 @@ Return[newGuess];
 
 
 (* ::Subsubsection::Closed:: *)
+(*LPAGuess*)
+
+
+LPAGuess[guess_] := Block[{},
+Return[Join[guess[[1;;gridSize+1]],{\[Eta]->(\[Eta]/.guess)}]]];
+
+
+(* ::Subsubsection::Closed:: *)
+(*LPApGuess*)
+
+
+LPApGuess[guess_] := Block[{},
+Return[Join[guess[[1;;gridSize+1]],{Y->yy[zNormalization]/.guess,\[Eta]->(\[Eta]/.guess)}]]];
+
+
+(* ::Subsubsection::Closed:: *)
 (*PlotFixedPoint*)
 
 
@@ -427,12 +503,20 @@ Return[newGuess];
 (*Plots a ListPlot for a list of replacements*)
 
 
-PlotFixedPoint[fixedPoint_] :=ListPlot[Transpose[Table[{v[i],z[i],yy[i]},{i,0,gridSize}]/.fixedPoint/.z[k_]->1], 
-	PlotLegends->{"V","Z","Y"},PlotLabel->"\[Eta]="<>ToString[\[Eta]/.fixedPoint],AxesLabel->{"i","f[i]"}];
+PlotFixedPoint[fixedPoint_] :=Block[{fp=fixedPoint},
+If[fixedPoint[[0]] == Association,
+	If[Length[fixedPoint]==1,
+		Return[PlotFixedPoint[fixedPoint[[1]],Keys[fixedPoint][[1]]]],
+		Print["Argument is not a valid model parametrization"];
+		Return[Null];]];
+If[MemberQ[Keys[fixedPoint],Y], AppendTo[fp,yy[k_]->(Y/.fp)];];
+ListPlot[Transpose[Table[{v[i],z[i],yy[i]},{i,0,gridSize}]/.fp/.z[k_]->1], 
+	PlotLegends->{"V","Z","Y"},PlotLabel->"\[Eta]="<>ToString[\[Eta]/.fp],AxesLabel->{"i","f[i]"}]];
 
 
-PlotFixedPoint[fixedPoint_,\[Rho]Max_] := Block[{tabelize,functions},
-tabelize[f_] := Table[{i \[Rho]Max/gridSize, f[i]},{i,0,gridSize}]/.fixedPoint/.z[k_]->1;
+PlotFixedPoint[fixedPoint_,\[Rho]Max_] := Block[{tabelize,functions, fp=fixedPoint},
+If[MemberQ[Keys[fixedPoint],Y], AppendTo[fp,yy[k_]->(Y/.fp)];];
+tabelize[f_] := Table[{i \[Rho]Max/gridSize, f[i]},{i,0,gridSize}]/.fp/.z[k_]->1;
 functions = Map[tabelize,{v,z,yy}];
 functions[[3,All,2]] = functions[[2,All,2]]- 2 functions[[3,All,1]]*functions[[3,All,2]];
 ListPlot[functions, PlotLegends->{"V",Subscript["Z","\[Sigma]"],Subscript["Z","\[Pi]"]},AxesLabel->{"\[Rho]","f[\[Rho]]"},PlotLabel->"\[Eta]="<>ToString[\[Eta]/.fixedPoint]]];
@@ -578,7 +662,7 @@ Return[Association["Minima"->min, "Maxima"->max]];
 ];
 
 
-(* ::Subsubsection:: *)
+(* ::Subsubsection::Closed:: *)
 (*\[Rho]MaxScan*)
 
 
@@ -588,7 +672,7 @@ Return[Association["Minima"->min, "Maxima"->max]];
 
 
 \[Rho]MaxScan[equations_, initialFixedPoint_, dim_, initial\[Rho]Max_, alpha_, \[Rho]Increment_, maxIterations_] := Block[
-{d\[Rho], min, j, guess, newFixedPoint, fixedPoints, fail, \[Rho]Max, desiredMinimumPosition=Floor[50*gridSize/60], FPCheck=IsWilsonFisher, fpMsg, errorMsg},
+{d\[Rho], min, j, guess, newFixedPoint, fixedPoints, fail, \[Rho]Max, desiredMinimumPosition=potentialMinimum, FPCheck=IsWilsonFisher, fpMsg, errorMsg},
 
 If[searchTricritical, FPCheck=IsTricritical];
 
@@ -687,7 +771,7 @@ For[i=1, i<=Length[keys], i++,
 	If[MemberQ[Keys[params],"N"], equations = equations /. n -> params["N"]];
 	Print[params];
 	
-	scan = \[Rho]MaxScan[equations, newGuess, params["dim"], params["\[Rho]Max"], params["alpha"], 0.025*params["\[Rho]Max"], 20];
+	scan = \[Rho]MaxScan[equations, newGuess, params["dim"], params["\[Rho]Max"], params["alpha"], 0.00625*params["\[Rho]Max"], 20];
 	
 	If[Length[scan]<2 || !IsFixedPoint[equations, scan[[1]], ConstRep[params["dim"], scan[[2]], params["alpha"]]], 
 		Print["No FP found for "<> ToString[params]];
@@ -726,14 +810,14 @@ Return[fixedPointDict];
 
 FixedPointDimScan[eqlist_, guess_, constants_, d_, initial\[Rho]Max_] := 
 Block[{fixedPointDict=Association[], newGuess=guess, scan,
-	\[Rho]Max=initial\[Rho]Max, step=0.05, steps=0, maxSteps=400, dim=d},
+	\[Rho]Max=initial\[Rho]Max, step=0.05, steps=0, maxSteps=40, dim=d},
 If[searchTricritical,
 	Print["Searching for tricritical fixed points"],
 	Print["Searching for critical fixed points"]];
 
 While[True,
 	steps++;
-	scan = \[Rho]MaxScan[eqlist, newGuess, dim, \[Rho]Max, constants["alpha"], 0.0125*\[Rho]Max, 20];
+	scan = \[Rho]MaxScan[eqlist, newGuess, dim, \[Rho]Max, constants["alpha"], 0.025*\[Rho]Max, 20];
 	
 	If[Length[scan]<2 || !IsFixedPoint[eqlist, scan[[1]], ConstRep[dim, scan[[2]], constants["alpha"]]], 
 		Print["No FP found for d="<> ToString[dim]];
@@ -773,9 +857,10 @@ Block[{params, fixedPointRep, anisotropyOrder, i, j,
 (* List of free parameters in a model *)
 params = DeleteDuplicates[Flatten[Transpose[Table[integrandsList[[All, 1]]/. {\[Rho] -> i eps}, {i, 0, gridSize}]]]];
 params = DeleteCases[params, z[zNormalization]];
+params = DeleteCases[params, Z];
 
 (* Fixed Point replacement including only free parameters and cutoff for expansion in anisotropic field *)
-fixedPointRep = Table[params[[i]]->(params[[i]] /. {t[k_] -> yy[k]} /. fixedPoint /. z[zNormalization]->1 /. {Subscript[w, j_][k_] -> 0} ),
+fixedPointRep = Table[params[[i]]->(params[[i]] /. {t[k_] -> yy[k], T->Y} /. fixedPoint /. {Subscript[w, j_][k_] -> 0} ),
 		{i,1,Length[params]}];
 		
 (* Gradient operator in model parameter space *)
@@ -786,6 +871,9 @@ FPSeries[f_] := (f /. fixedPointRep) + (params -(params/.fixedPointRep)).FPGrad[
 (* Anomalous dimension in terms of other parameters *)
 \[Eta]Replacement = {\[Eta]->0};
 ZIndex = Position[integrandsList[[All, 1]], z[\[Rho]/eps]];
+If[Length[ZIndex]==0,
+	ZIndex = Position[integrandsList[[All, 1]], Z];];
+
 If[Length[ZIndex]>0,
 	ZIndex = ZIndex[[1,1]];
 	\[Eta]Flow = integrandsList[[ZIndex]];
@@ -794,7 +882,7 @@ If[Length[ZIndex]>0,
 	\[Eta]Equation = NumericDerivatives[\[Eta]Equation /. \[Rho] -> zNormalization eps];
 	\[Eta]Solution = Solve[(\[Eta]Equation /. constants)==0, \[Eta]] // Flatten;
 	\[Eta]Replacement = { \[Eta] -> FPSeries[\[Eta] /. \[Eta]Solution] };];
-	
+
 (* Derivatives of equations*)
 stabilityMatrix = {};
 For[i=1, i<=Length[integrandsList], i++,
@@ -803,10 +891,10 @@ For[i=1, i<=Length[integrandsList], i++,
 
 	integrand[q_] = integrandsList[[i,3]] /. regulatorReplacement /. y -> q;
 	scaling = integrandsList[[i,2]];
+	If[function == Z, Continue[]];
 
-	For[j=0, j<=gridSize, j++,
-		(* Skips one iteration at Z[normalization] *)
-		If[function==z[\[Rho]/eps] && j==zNormalization, Continue[]];
+	AddRow[j_] := Block[{},
+		If[function==z[\[Rho]/eps] && j==zNormalization, Return[]];
 		
 		If[j==0 && MatchQ[function, yy[\[Rho]/eps]],
 			(* Y[\[Rho]] has separate formula for integrand at \[Rho]=0 *)
@@ -815,13 +903,17 @@ For[i=1, i<=Length[integrandsList], i++,
 			(* Takes gradient of the flow equation *)
 			integrandPoint[q_] = FPGrad[NumericDerivatives[integrand[q] /. \[Rho] -> j eps]
 				/. \[Eta]Replacement /. constants];
-		];
+			];
 
 		scalingGradient = NumericDerivatives[scaling/. \[Rho]->j eps] /. \[Eta]Replacement /. constants;
 
 		AppendTo[stabilityMatrix, FPGrad[scalingGradient] + GetIntegral[integrandPoint]];
-		];
 	];
+	If[MatchQ[function,f_[\[Rho]_]],
+		Map[AddRow,Range[0,gridSize]],
+		AddRow[zNormalization];
+	];
+];
 Return[stabilityMatrix];
 ];
 
@@ -868,7 +960,7 @@ If[Length[integrandsListAnisotropic] > 0,
 
 	For[j=1, j<=Length[eigenvaluesIsotropic], j++,
 		(* y is the lowest eigenvalue that appears in anisotropic model but not in isotropic *)
-		If[Abs[eigenvaluesIsotropic[[j]] - eigenvaluesAnisotropic[[j]]] < 10^-4,
+		If[Abs[eigenvaluesIsotropic[[j]] - eigenvaluesAnisotropic[[j]]] < 10^-3,
 			Continue[]];
 		criticalExponents[y] = eigenvaluesAnisotropic[[j]];
 		Break[];
@@ -912,7 +1004,7 @@ For[i=1, i<=Length[keys], i++,
 	cRep = ConstRep[params["dim"], params["\[Rho]Max"], params["alpha"]];
 
 	equationsIsotropic = integrandsListIsotropic;
-	If[Length[integrandsListAnisotropic] == 0, 
+	If[MemberQ[Keys[params],"N"], 
 		equationsIsotropic = equationsIsotropic /. n -> params["N"]];
 	
 	{exponents[key[[1;;-2]]], matrices[key[[1;;-2]]]} = GetCriticalExponents[equationsIsotropic, integrandsListAnisotropic, fixedPoint, cRep];

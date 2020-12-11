@@ -14,13 +14,14 @@ GetEquationsFileName[task_, fieldOrder_, anisotropyOrder_] :=
 			".wdx"}]];
 
 
-GetCacheDirectory[task_, fieldOrder_, regulatorName_] :=
-Block[{directoryName,dirPrefix=task},
+GetCacheDirectory[task_, fieldOrder_, regulatorName_,LPA_:False] :=
+Block[{directoryName,dirPrefix=task,sufix=""},
 If[task=="regulator", dirPrefix="ON"];
+If[LPA, sufix="_LPA"];
 
 directoryName = StringJoin[{dirPrefix,"_", 
 	If[fieldOrder==0, "functional", {"field", ToString[fieldOrder]}],
-	"_", regulatorName, "/"}];
+	"_", regulatorName, sufix, "/"}];
 If[! DirectoryQ[directoryName], CreateDirectory[directoryName]];
 Return[directoryName]; 
 ];
