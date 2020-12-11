@@ -1,7 +1,7 @@
 export DISPLAY=:0
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 
-catalog='/home/andrzej/Documents/Studia/Anizotropie/FunctionalRenormalization/'
+catalog='/home/andrzej/Documents/Uczelnia/Anizotropie/FunctionalRenormalization/'
 nq=$catalog.new_queue
 oq=$catalog.old_queue
 
