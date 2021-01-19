@@ -40,7 +40,7 @@ If[debug,
 	configuration = 2;
 	ON = False;
 	regulatorName = "smooth";
-	LPA = True,
+	LPA = False,
 	
 	(* Release run configuration *)
 	LPA = False;
@@ -179,13 +179,14 @@ Export[cacheDirectory<>FIXEDPOINTSFILE,{allFPs,allExponents}];
 
 
 (* ::Subsubsection::Closed:: *)
-(*Z4-anisotropy dimension dependence*)
+(*Z4 - anisotropy dimension dependence*)
 
 
 If[ task == "Z4",
 {guess, dim, \[Rho]Max} = Import[guessfile];
 guess = AdjustNumberOfPoints[guess, gridSize,zNormalization];
 If[LPA,guess = LPApGuess[guess];];
+guess = ConvertGuess[guess, \[Rho]Max];
 
 configurations = Import[runconf];
 
@@ -224,9 +225,12 @@ If[alpha<1., FindInitialGuess[1., alpha, -0.2],
 
 fixedPointDict = FixedPointDimScan[eqlist, guess, constants, dim, \[Rho]Max];
 
-exponents = FindExponents[integrandsListIsotropic, integrandsListAnisotropic, fixedPointDict, {"dim","\[Rho]Max"}, constants];
+selectedDims = {3.,2.9,2.8,2.7,2.6,2.5,2.4,2.3,2.2,2.15,2.1};
+shortFixedPointDict = KeySelect[fixedPointDict,(Min[#[[1]]-selectedDims]<=10^-4 || #[[1]]<=2.1)&&(#[[1]]>=2.-10^-4)&];
 
-fixedPointDict = UnnestAssociation[TransposeAssociation[Association[alpha->fixedPointDict]]];
+exponents = FindExponents[integrandsListIsotropic, integrandsListAnisotropic, shortFixedPointDict, {"dim","\[Rho]Max"}, constants];
+
+fixedPointDict = UnnestAssociation[Association[alpha->fixedPointDict]];
 exponents = UnnestAssociation[TransposeAssociation[Association[alpha->exponents]]];
 
 Export[cacheDirectory<>FIXEDPOINTSFILES[configuration],{fixedPointDict,exponents}];
@@ -243,7 +247,7 @@ Export[cacheDirectory<>FIXEDPOINTSFILE,{allFPs,allExponents}];
 ];
 
 
-(* ::Subsubsection:: *)
+(* ::Subsubsection::Closed:: *)
 (*Z4 - anisotropy plotting regulator dependence*)
 
 
@@ -665,7 +669,7 @@ Export[cacheDirectory<>"eta1.png",
 ];
 
 
-(* ::Subsubsection::Closed:: *)
+(* ::Subsubsection:: *)
 (*Other*)
 
 
@@ -673,38 +677,293 @@ If[!debug, Quit[]];
 (* Anything below this line won't be executed in command line run *)
 
 
-{fps,exps} = Import[cacheDirectory<>FIXEDPOINTSFILES[3]];
-nestedfps = NestAssociation[fps];
-nestedexps = NestAssociation[exps];
+{fps,allExponents} = Import[cacheDirectory<>FIXEDPOINTSFILE];
+
+allExponents = NestAssociation[allExponents];
+exps = {\[Nu],\[Eta],e1,y};
+(*ticks = Association[\[Eta]-> {Table[2+0.25i,{i,0,4}],Table[0.1i,{i,0,4}]},e1-> {Table[2+0.25i,{i,0,4}],Table[0.5i,{i,0,4}]}];*)
 
 
-{guess, dim, \[Rho]Max} = Import[guessfile];
-guess = AdjustNumberOfPoints[guess, gridSize,zNormalization];
+ydata = TransposeAssociation[allExponents[y2]];
+lowd = {2., 2.1,2.2,2.3};(*,2.2,2.3,2.4};*)
+midd = {2.2,2.3,2.4,2.5};
+hid = {2.5,2.6,2.7,2.8,2.9,3.};
+datasets = {hid,lowd,midd};
+names = {"high","low","middle"};
 
-configurations = Import[runconf];
+plotEigen[e_] := Block[{list},
+list = Re[KeySelect[TransposeAssociation[allExponents[e]],(#>=2)&]];
+Return[ListPlot[Values[list],PlotLegends->Keys[list],PlotRange->All]];];
 
-If[!Element[configuration,Integers] || configuration<1 || configuration > Length[configurations],
-	Print["Choose proper run cofiguration id"];
-	Quit[]];
-constants = configurations[[configuration]];
+
+exps = {y1,y2,y3,y4};
+
+
+PlotSelected[exps_,dims_,title_]:= Block[{expons={},SelectStyle,p, legend, yrange, min, max},
+SelectStyle[length_]:=Block[{},
+	curves = Join[
+	Table[Directive[AbsoluteThickness[0.01],ColorData[97, "ColorList"][[i]]],{i,1,length}],
+	Table[Directive[AbsoluteThickness[2],ColorData[97, "ColorList"][[i]]],{i,1,length}]];
+	markers = Join[Tuples[{Table["\[FilledCircle]",{i,1,length}],{10}}],Tuples[{Table["\[Cross]",{i,1,length}],{1}}]];];
+
+expons = Re[Map[Values[KeySelect[TransposeAssociation[allExponents[#]],(Min[Abs[#-dims]]<0.001)&]]&,exps]];
+
+If[Length[exps]==2,
+	SelectStyle[Length[dims]];
+	legend = Map["d="<>ToString[#]&,Sort[dims,#1>#2&]],
+	If[Length[dims]<=2,
+		expons = Transpose[expons];
+		SelectStyle[Length[exps]];
+		legend = Map[ToString[#]&,exps];,
+		
+		Print["Either exps or dims should have length 2"];
+		Return[];
+	];
+];
+expons = Flatten[expons];
+min = Min[expons];
+max = Max[expons];
+
+yrange = {Min[min-(max-min)*0.05,-0.025],Max[max+(max-min)*0.05,0.025]};
+p = ListLinePlot[expons, PlotStyle->curves, PlotMarkers->markers, LabelStyle->Directive[Bold, 14], 
+	PlotLegends->LineLegend[legend,LegendMarkerSize->{30,20}], PlotLabel->Style[ToString[title],FontSize->20],
+	ImageSize->Large, AxesLabel->{"\[Alpha]"},PlotRange->yrange];
+	
+Export["~/Desktop/"<>ToString[title]<>".png",p];
+];
+
+
+exps = {e1,y1};
+dims={2.,2.05,2.1,2.15,2.2,2.3};
+title="First EV";
+
+
+PlotSelected[{e1,y1},{2.,2.05,2.1,2.15,2.2,2.3},"First EV"]
+
+
+Map[PlotSelected[{e2,y2,y3,y4},{#},"EVs (d="<>ToString[#]<>")"]&,{2.,2.05,2.1,2.15,2.2,2.3, 2.6, 3.}]
+
+
+dims = {2.1,2.2};
+exps = {y1,y2,y3};
+
+
+expons = Flatten[Transpose[Re[Map[Values[KeySelect[TransposeAssociation[allExponents[#]],(Min[Abs[#-dims]]<0.001)&]]&,exps]]];
+
+
+TransposeAssociation[allExponents[y1]]
+
+
+expons = Re[Map[Values[KeySelect[TransposeAssociation[allExponents[#]],(Min[Abs[#-dims]]<0.001)&]]&,exps]]
+
+
+allExponents[y1][2.]
+
+
+dims = {3.,2.6,2.3,2.15,2.1,2.05, 2.0};
+exps = {e1,y1};
+expons = Flatten[Re[Map[Values[KeySelect[TransposeAssociation[allExponents[#]],(Min[Abs[#-dims]]<0.001)&]]&,exps]]];
+
+curves = Join[Table[Directive[AbsoluteThickness[2],ColorData[97, "ColorList"][[i]]],{i,1,Length[dims]}],
+Table[Directive[AbsoluteThickness[0.01],ColorData[97, "ColorList"][[i]]],{i,1,Length[dims]}]];
+markers = Join[Tuples[{Table["\[Cross]",{i,1,Length[dims]}],{1}}],Tuples[{Table["\[FilledCircle]",{i,1,Length[dims]}],{10}}]];
+
+
+dims = {3.,2.6,2.3,2.15,2.1,2.05, 2.01};
+exps = {e1,y2};
+expons = Flatten[Re[Map[Values[KeySelect[TransposeAssociation[allExponents[#]],(Min[Abs[#-dims]]<0.001)&]]&,exps]]];
+
+curves = Join[Table[Directive[AbsoluteThickness[2],ColorData[97, "ColorList"][[i]]],{i,1,Length[dims]}],
+Table[Directive[AbsoluteThickness[0.01],ColorData[97, "ColorList"][[i]]],{i,1,Length[dims]}]];
+markers = Join[Tuples[{Table["\[Cross]",{i,1,Length[dims]}],{1}}],Tuples[{Table["\[FilledCircle]",{i,1,Length[dims]}],{7}}]];
+
+
+p = ListLinePlot[expons, PlotStyle->curves, PlotMarkers->markers, 
+	PlotLegends->LineLegend[Map["d="<>ToString[#]&,dims],LegendMarkerSize->{30,20}],
+	ImageSize->Large, AxesLabel->{"\[Alpha]"}, LabelStyle->Directive[Bold, Medium]]
+Export["~/Desktop/e1.png",p];
+
+
+p= ListPlot[expons[[Length[dims]+1;;-1]], PlotMarkers->markers[[Length[dims]+1;;-1]],
+	PlotLegends->LineLegend[Map["d="<>ToString[#]&,dims],LegendMarkerSize->{30,20}],
+	ImageSize->Large, AxesLabel->{"\[Alpha]"}, LabelStyle->Directive[Bold, Medium]];
+Export["~/Desktop/e2.png",p];
+
+
+data = Map[SelectClosest[ydata,#]&,lowd];
+dataComplex = Select[Association[MapThread[(#2->Re[Select[#1,(Abs[Im[#]]>10^-4&)]]&),{data,lowd}]],(Length[#]>0&)];
+dataReal = Select[Association[MapThread[(#2->Re[Select[#1,(Abs[Im[#]]<10^-4&)]]&),{data,lowd}]],(Length[#]>0&)];
+
+allData = Join[dataReal,dataComplex];
+
+
+curves = Table[Directive[AbsoluteThickness[4],ColorData[97, "ColorList"][[i]]],{i,1,Length[dataReal]+Length[dataComplex]}];
+markers = Tuples[{Join[Table["\[FilledCircle]",{i,1,Length[dataReal]}],Table["\[FilledSquare]",{i,1,Length[dataComplex]}]],{10}}];
+ListPlot[allData, PlotLegends->lowd, PlotMarkers->markers, PlotStyle->curves]
+
 
 eqlist = IntegrateEquations[integrandsListIsotropic];
 
 
-fpList[0] = guess;
-\[Rho]MaxList[0] = 0.1;
-dims={3.,2.8,2.6,2.4,2.2,2.,1.9,1.8,1.75,1.7,1.65,1.625,1.6,1.575,1.55,1.5375,1.525,1.5,1.475,1.45,1.425,1.4,1.3,1.2,1.1,1.05,1.};
+initial = Import[guessfile];
 
 
-For[i = 1,  i <= Length[dims], i++,
-  {newfp, new\[Rho]Max} = \[Rho]MaxScan[eqlist, fpList[i - 1], dims[[i]], \[Rho]MaxList[i - 1], 2., \[Rho]MaxList[i - 1]*0.025, 20];
-  fpList[i] = newfp;
-  \[Rho]MaxList[i] = new\[Rho]Max;
-  Print[i];];
+{fp,dim,\[Rho]Max} = initial;
 
 
-For[i = 15,  i <= Length[dims], i++,
-  {newfp, new\[Rho]Max2} = \[Rho]MaxScan[eqlist2, fpList2[i - 1], dims[[i]], \[Rho]MaxList2[i - 1], 2., \[Rho]MaxList2[i - 1]*0.025, 20];
-  fpList2[i] = newfp;
-  \[Rho]MaxList2[i] = new\[Rho]Max2;
-  Print[i];];
+fp = AdjustNumberOfPoints[fp,gridSize,0];
+
+
+\[Rho]Max = 13.602912541287434`;
+alpha = 2;
+fp = SelectClosest[fps,2.][[5,1]];
+dim=2;
+const = ConstRep[dim,\[Rho]Max,alpha];
+
+
+vs = Table[v[i]->(v[i]/.fp),{i,0,gridSize}];
+zss = Table[zs[i]->(z[i]/.fp),{i,1,gridSize}];
+zps = Table[zp[i]->((z[i]-2 i eps yy[i])/.fp/.ConstRep[3,7.5]),{i,1,gridSize}];
+fp2 = Join[vs,zss,zps,{\[Eta]->(\[Eta]/.fp)}];
+
+
+guess = FindFixedPoint[eqlist, fp,const];
+
+
+smiso = StabilityMatrix[integrandsListIsotropic,guess,ConstRep[3.,7.5]];
+
+
+EigenSys[smiso][[1;;2,1]]
+
+
+integrandsShort = Select[integrandsListAnisotropic,MemberQ[{v[\[Rho]/eps],Subscript[w, 1][\[Rho]/eps],zs[\[Rho]/eps],zp[\[Rho]/eps],t[\[Rho]/eps]},#[[1]]]&] /. 
+{Subscript[zs, 1][i_]->0,Subscript[zp, 1][i_]->0};
+
+
+integrandsShort = Select[integrandsListAnisotropic,MemberQ[{v[\[Rho]/eps],Subscript[w, 1][\[Rho]/eps],zs[\[Rho]/eps],zp[\[Rho]/eps]},#[[1]]]&] /. 
+{Subscript[zs, 1][i_]->0,Subscript[zp, 1][i_]->0, t[0]->NumericDerivatives[zs'[0]-zp'[0]] /(4 eps), t-> ((zs[#]-zp[#])/(4*#)&)};
+
+
+integrandsShort[[-1]] = integrandsShort[[-1,1;;3]];
+
+
+eqlistAniso = IntegrateEquations[integrandsShort];
+
+
+eqlistAniso/.  {Subscript[f_, 1][i_]->0,t[0]->NumericDerivatives[zs'[0]-zp'[0]] /(4 eps), t[i_]/;i>0 -> (zs[i]-zp[i])/(4*i eps)}/. guess/.ConstRep[3,7.5]
+
+
+integrandsListAnisotropic[[All,1]]
+
+
+sm1 = StabilityMatrix[integrandsListAnisotropic,guess,const];
+
+
+es1 = EigenSys[sm1];
+
+
+es = EigenSys[sm];
+
+
+es1[[1;;2,1]]
+
+
+es1[[1;;6,1]]
+
+
+dev = Table[(zs[i] - zp[i])/(4 i eps) - t[i]/.const,{i,1,gridSize}];
+
+
+EncodeEigenvector[ev_]:=Block[{eval0 = {v,w,t}, labels={i,j},f,vec={},k},
+If[Length[ev] == 7*gridSize+3,labels = {v,w,zs,zp,t,zs1,zp1};];
+If[Length[ev] == 3*gridSize+1,labels = {v,zs,zp};];
+
+k=1;
+For[i=1,i<=Length[labels],i++,
+	start = 1;
+	f= labels[[i]];
+	If[MemberQ[eval0,f],start=0];
+	For[j=start,j<=gridSize,j++,
+		AppendTo[vec,f[j]->Re[ev[[k]]]];
+	];
+];
+Return[vec];
+];
+
+
+coded = EncodeEigenvector[es1[[4,2]]];
+
+
+dev/.coded
+
+
+ListPlot[es1[[4,2]]]
+
+
+Length[es1[[4,2]]]-7*gridSize
+
+
+Definition[PlotFixedPoint]
+
+
+ListPlot[es1[[4,2]]]
+
+
+ListPlot[Re[es1[[1;;3,2]]]]
+
+
+ListPlot[es[[1;;2,2]],PlotRange->{-0.01,0.01}]
+
+
+es[[1;;5,1]]
+
+
+sm2 = StabilityMatrix[integrandsShort,guess,ConstRep[3.,7.5]];
+
+
+MatrixQ[sm2,NumberQ]
+
+
+sys2= EigenSys[sm2];
+
+
+ListPlot[sys2[[1;;3,2]] {1,-1,1}]
+
+
+sys2[[All,1]]
+
+
+sys2[[All,1]]
+
+
+{fps,exps} = Import["/home/andrzej/FunctionalRenormalization/fixed_points1.wdx"];
+
+
+nested = NestAssociation[exps];
+nested2 = TransposeAssociation[nested][1.];
+nested3 = TransposeAssociation[KeySelect[TransposeAssociation[nested2],#>=2&]];
+
+
+selected = KeySelect[nested3,MemberQ[{e2,e3,e4},#]&];
+
+
+ee2 = KeySort[Join[KeySelect[selected[e2],#<=2.4&],KeySelect[selected[e4],(2.6>=#&& #>2.4)&],KeySelect[selected[e3],2.6<#&]]];
+ee3 = KeySort[Join[KeySelect[selected[e3],#<=2.4&],KeySelect[selected[e2],(2.6>=#&& #>2.4)&],KeySelect[selected[e2],2.6<#&]]];
+ee4 = KeySort[Join[KeySelect[selected[e4],#<=2.4&],KeySelect[selected[e3],(2.6>=#&& #>2.4)&],KeySelect[selected[e4],2.6<#&]]];
+
+
+split= Flatten[Map[{Re[#],Im[#]}&,{ee3,ee4}]];
+
+
+split= Flatten[Map[{Re[#],Im[#]}&,Values[selected]]];
+
+
+curves = Table[Directive[AbsoluteThickness[4],ColorData[97, "ColorList"][[Ceiling[i/2]]]],{i,1,6}];
+markers = Tuples[{{"\[FilledCircle]", "\[FilledDiamond]", "\[FilledCircle]", "\[FilledDiamond]", "\[FilledCircle]", "\[FilledDiamond]"},{13}}];
+
+
+
+
+p = ListPlot[split,PlotMarkers->markers,PlotStyle->curves, AxesLabel->{"d","Eigenvalue"},LabelStyle->Large, Ticks->Automatic,GridLines->Automatic,ImageSize->Large];
+Export["ising.png", p]
+
