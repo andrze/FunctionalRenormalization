@@ -22,7 +22,7 @@ def run(mode, regulator, num_conf, additional=""):
         file.write("%s -script Run.wl -regulator %s -task %s -conf %i %s\n" % (mathematica_path, regulator, mode, i, additional))
         file.close()
     
-        command = 'qsub -l mem=8000mb,walltime=120:00:00 %s/tasks/%s' % (home, filename)
+        command = 'qsub -l mem=8000mb,walltime=240:00:00 %s/tasks/%s' % (home, filename)
         print command
         system(command)
 
