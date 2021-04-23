@@ -20,11 +20,12 @@ SetAttributes[debug,Protected];
 If[debug,
 	(* Debugging configuration *)
 	n\[Phi]=0; 
-	n\[Tau]=1; 
-	ON=False;
+	n\[Tau]=0; 
+	ON=True;
 	LPA=False;
-	anisotropySymmetry=4;
-	n=2;
+	strict=False;
+	anisotropySymmetry="ON";
+	(*n=2;*)
 	SetAttributes[n,{Protected,Constant}],
 		
 	(* Run configuration serialization *)
@@ -40,6 +41,7 @@ If[debug,
 	n\[Phi] = Null;
 	n\[Tau] = Null;
 	ON = False;
+	strict = False;
 	anisotropySymmetry = Null;
 	Block[{i},
 	For[i = 1, i<=Length[arguments], i++,
@@ -57,6 +59,7 @@ If[debug,
 				task = "Z"<>ToString[anisotropySymmetry]]];
 		If[arguments[[i]] == "phi", n\[Phi] = ToExpression[arguments[[i+1]]]];
 		If[arguments[[i]] == "tau", n\[Tau] = ToExpression[arguments[[i+1]]]];
+		If[arguments[[i]] == "strict", strict=True];
 		];
 	];
 
@@ -131,12 +134,12 @@ $Assumptions = VariablesRange;
 varRep = Table[repExpressions[[i]] -> FullSimplify[repExpressions[[i]] /. disentangled, Assumptions -> VariablesRange], {i, 1, Length[repExpressions]}]; 
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Effective action (function of \[Rho] and \[Tau])*)
 
 
 If[ON,
-\[CapitalGamma]:= int[U[\[Rho][x]] + (Z[\[Rho][x]]-2 \[Rho][m,x] Y[\[Rho][x]])/2  Sum[D[m[i][x], x]^2, {i, 1, 3}] + Y[\[Rho][x]]/(2) (Sum[m[i][x] D[m[i][x], x], {i, 1, 3}])^2, x],
+\[CapitalGamma]:= int[U[\[Rho][x]] + Zp[\[Rho][x]]/2  Sum[D[m[i][x], x]^2, {i, 1, 3}] + (Zs[\[Rho][x]]-Zp[\[Rho][x]])/(4 \[Rho][m,x]) (Sum[m[i][x] D[m[i][x], x], {i, 1, 3}])^2, x],
 (*\[CapitalGamma]:= int[U[\[Rho][x],\[Tau][x]] + (Z[\[Rho][x]]-2 \[Rho][m, x] Y[\[Rho][x]])/2  Sum[D[m[i][x], x]^2, {i, 1, 2}] 
 	+ Y[\[Rho][x]]/2 (Sum[m[i][x] D[m[i][x], x], {i, 1, 2}])^2 + T[\[Rho][x]]m[1][x]m[2][x] D[m[1][x],x]D[m[2][x],x], x];*)
 (*\[CapitalGamma]:= int[U[\[Rho][x],\[Tau][x]] + (Z[\[Rho][x]])/2  Sum[D[m[i][x], x]^2, {i, 1, 2}],x ],*)
@@ -243,13 +246,22 @@ TagBox[
 RowBox[{"(", 
 RowBox[{"i_", ",", "j_"}], ")"}],
 Derivative],
-MultilineFunction->None]\)[\[Rho]_,\[Tau]_] /; j>0 -> 0, T -> ((Zs[#]-Zp[#])/(4#)&), \[Tau] -> 0}]&
-EvAt\[Rho]0[f_] := (Normal[Series[Collect[f /. {\[Tau] -> 0, gs->g, gp->g, Subscript[Zs, 1]->(Subscript[Zp, 1][0]+# Subscript[Zp, 1]'[0]&), Zs->(Zp[0]+# Zs'[0]&)},{1/g}, Simplify], {\[Rho], 0, 0}]])
-Dimensionless := 4 y^(dim-1) vd (# /. regulatorRep /. dimensionlessRep)&
+MultilineFunction->None]\)[\[Rho]_,\[Tau]_] /; j>0 -> 0, Subscript[f_, j_]->(0&), 
+T[0]-> (Zs'[0]-Zp'[0])/4, T'[0] -> (Zs''[0]-Zp''[0])/8, T''[0]->1/12(-\!\(\*SuperscriptBox[\(Zp\), 
+TagBox[
+RowBox[{"(", "3", ")"}],
+Derivative],
+MultilineFunction->None]\)[0]+\!\(\*SuperscriptBox[\(Zs\), 
+TagBox[
+RowBox[{"(", "3", ")"}],
+Derivative],
+MultilineFunction->None]\)[0]), 
+T -> ((Zs[#]-Zp[#])/(4#)&), \[Tau] -> 0}]&
+Dimensionless := 4 y^(d-1) vd (# /. regulatorRep /. dimensionlessRep)&
 (*Dimensionless := 2 vd y^(d/2 - 1) # /. regulatorRep /. dimensionlessRep&*)
 
 
-(* ::Section::Closed:: *)
+(* ::Section:: *)
 (*Definitions of Functionals*)
 
 
@@ -282,7 +294,7 @@ SetAttributes[d,{Orderless,Protected}];
 
 
 grad[f_, p_, q_] := Module[{der, simple, res, repped, a,b,s,r,i,j},
-repped= f /.{d[q,q]->q^2, d[p,p] -> p^2, d[p,q]->p q/Sqrt[dim], (a_. p + b_. q)^2 -> a^2 p^2 + 2 a b p q/Sqrt[dim] + b^2 q^2};
+repped= f /.{d[q,q]->q^2, d[p,p] -> p^2, d[p,q]->p q/Sqrt[d], (a_. p + b_. q)^2 -> a^2 p^2 + 2 a b p q/Sqrt[d] + b^2 q^2};
 der = SeriesCoefficient[repped,{p, 0, 1}];
 Return[der];
 ];
@@ -297,15 +309,7 @@ Return[der];
 
 
 lap[f_, p_, q_] := Module[{der, simple, res, repped, a,b,s,r,i,j},
-repped= f /.{d[q,q]->q^2, d[p,p] -> p^2 (a_. p + b_. q)^2 -> a^2 p[1]^2 + 2 a b p[1] q[1] + b^2 q^2};
-der = SeriesCoefficient[repped,{p[1],0, 2}];
-res = (SeriesCoefficient[der, {q[1], 0, 0}] + q^2 / dim SeriesCoefficient[der, {q[1], 0, 2}]);
-Return[res]
-];
-
-
-lap[f_, p_, q_] := Module[{der, simple, res, repped, a,b,s,r,i,j},
-repped= f /.{d[q,q]->q^2, d[p,p] -> p^2, d[p,q]->p q/Sqrt[dim], (a_. p + b_. q)^2 -> a^2 p^2 + 2 a b p q/Sqrt[dim] + b^2 q^2};
+repped= f /.{d[q,q]->q^2, d[p,p] -> p^2, d[p,q]->p q/Sqrt[d], (a_. p + b_. q)^2 -> a^2 p^2 + 2 a b p q/Sqrt[d] + b^2 q^2};
 der = SeriesCoefficient[repped,{p,0, 2}];
 Return[der]
 ];
@@ -496,13 +500,13 @@ TagBox[
 RowBox[{"(", "i", ")"}],
 Derivative],
 MultilineFunction->None]\)[\[Rho]], f_[\[Rho]_,0]/;MemberQ[{Zs,Zp},f] -> f[\[Rho]]};
-anisotropyExpansion = { (*\[Phi][2]^k_. (f_^(i_,j_))[\[Rho]_, \[Tau]_] /; j+k*2/anisotropySymmetry>n\[Tau]->0,*)
+anisotropyExpansion = { 
 	\!\(\*SuperscriptBox[\(f_\), 
 TagBox[
 RowBox[{"(", 
 RowBox[{"i_", ",", "j_"}], ")"}],
 Derivative],
-MultilineFunction->None]\)[\[Rho], \[Tau]_] /; j>n\[Tau] -> 0, \[Tau]^i_ /; i>n\[Tau] -> 0, \[Phi][2]^i_ /; i*2/anisotropySymmetry > n\[Tau] ->0, Subscript[W, j_]/;j>n\[Tau]->(0&),
+MultilineFunction->None]\)[\[Rho], \[Tau]_] /; j>n\[Tau] -> 0, \[Tau]^i_ /; i>n\[Tau] -> 0, \[Phi][2]^i_ /; i/anisotropySymmetry > n\[Tau] ->0, Subscript[W, j_]/;j>n\[Tau]->(0&),
 	Subscript[Zs, j_]/;j>1->(0&),Subscript[Zp, j_]/;j>1->(0&)
 	};
 If[n\[Tau]>0, AppendTo[anisotropyExpansion, \!\(\*SuperscriptBox[\(U\), 
@@ -561,12 +565,23 @@ propRep = {1/props[[1]] -> gs, Expand[1/props[[1]]] -> gs, Simplify[1/props[[2]]
 propRep = propRep/.anisotropyExpansion;
 propRep= Join[propRep,(propRep/.d[q_,q_]->q^2)];
 propRep = Join[propRep, propRep /. d[q_,p_] -> q p];
-propReverse = {gs -> 1/props[[1]], gp -> 1/props[[2]], g-> 1/EvAt\[Rho]0[props[[1]]]}/.d[q,q]->q^2;
+propReverse = {gs -> 1/props[[1]], gp -> 1/props[[2]], g-> (1/props[[1]] /.\[Rho]->0)}/.d[q,q]->q^2;
 
 propReverseDimensionless = propReverse /. regulatorRep /. dimensionlessRep;
 
 ReplaceProps := Collect[Collect[Collect[#//.propRep, props, Simplify] //. propRep, props, FullSimplify] //. propRep,
 	{1/gs,1/gp},FullSimplify]&;
+
+
+order = 3;
+Map[({Subscript[gs,#],Subscript[gp,#]} = SeriesCoefficient[{gs,gp}/.propReverse,{\[Rho],0,#}])&,Range[order]];
+
+EvAt\[Rho]0[f_] := (Collect[f /. {\[Tau] -> 0, 
+ gs^i_. -> Series[gs[\[Rho]]^i,{\[Rho],0,order}]/.{gs[0]->g, Derivative[k_][gs][0]-> k! Subscript[gs,k]},
+ gp^i_. -> Series[gp[\[Rho]]^i,{\[Rho],0,order}]/.{gp[0]->g, Derivative[k_][gp][0]-> k! Subscript[gp,k]}, 
+    Subscript[Zs, 1]->(Subscript[Zs, 1][#]&),
+	(*Subscript[Zs, 1]\[Rule]Subscript[Zp, 1][0]+# Subscript[Zs, 1]'[0]+#^2/2 Subscript[Zs, 1]''[0]&), *)
+	Zs->(Zp[0]+# Zs'[0]+#^2/2 Zs''[0] + #^3/6 Zs'''[0]&)},{g}, Normal[Series[#,{\[Rho],0,0}]]&])
 
 
 (* ::Subsection::Closed:: *)
@@ -694,39 +709,13 @@ flowEquations = Drop[Flatten[equationsExpanded,1],1] /. {Subscript[u, i_,j_] /; 
 (*Vertices in general*)
 
 
-\[CapitalGamma]3 = Simplify[Simplify[Clean[{p,q,r}][raw\[CapitalGamma]3[p,q,r]]]/. anisotropyExpansion/. {r->-p-q}];
-\[CapitalGamma]4 = Simplify[Simplify[Clean[{p,q,r,s}][raw\[CapitalGamma]4[p,q,r,s]]]/.anisotropyExpansion/. {q->-p,r->q,s->-q}];
-Gq = G[p,q] /. {p->-q}/.anisotropyExpansion;
+If[!ON,
+	\[CapitalGamma]3 = Simplify[Simplify[Clean[{p,q,r}][raw\[CapitalGamma]3[p,q,r]]]/. anisotropyExpansion/. {r->-p-q}];
+	\[CapitalGamma]4 = Simplify[Simplify[Clean[{p,q,r,s}][raw\[CapitalGamma]4[p,q,r,s]]]/.anisotropyExpansion/. {q->-p,r->q,s->-q}];
+	Gq = G[p,q] /. {p->-q}/.anisotropyExpansion;]
 
 
 (* ::Subsubsection::Closed:: *)
-(*Vertices in minimal configuration*)
-
-
-M\[CapitalGamma]3 = Simplify[Minimal[Clean[{p,q,r}][raw\[CapitalGamma]3[p,q,r]]]];
-M\[CapitalGamma]3 = DersCollect[M\[CapitalGamma]3/.DerRep];
-
-
-M\[CapitalGamma]4 = Simplify[Minimal[Clean[{p,q,r,s}][raw\[CapitalGamma]4[p,q,r,s]]]];
-M\[CapitalGamma]4 = DersCollect[M\[CapitalGamma]4/.DerRep];
-
-
-(*If[!ON && !LPA,
-	M\[CapitalGamma]5 = Simplify[Minimal[Clean[{p,q,r,s,t}][raw\[CapitalGamma]5[p,q,r,s,t]]]];
-	M\[CapitalGamma]5 = DersCollect[M\[CapitalGamma]5];]*)
-
-
-If[ON,
-M\[CapitalGamma]3=ONSym[M\[CapitalGamma]3];
-M\[CapitalGamma]4=ONSym[M\[CapitalGamma]4];
-];
-
-
-(* ::Text:: *)
-(*For flows of both Z and Y we have two contributing diagrams: tadpole with one \[CapitalGamma]4 vertex and bubble with two \[CapitalGamma]3 vertices.*)
-
-
-(* ::Subsubsection:: *)
 (*Flow equations from \[CapitalGamma](2) - for Z4 anisotropy*)
 
 
@@ -734,50 +723,38 @@ M\[CapitalGamma]4=ONSym[M\[CapitalGamma]4];
 (*General function for extracting flow equations for \[CapitalGamma](2) functions*)
 
 
-\[CapitalGamma]4exp = Normal[Series[\[CapitalGamma]4//.varRep/.disentangled,{\[Tau],0,Min[n\[Tau],1]}]]/.DerRep;
-\[CapitalGamma]3exp = Normal[Series[\[CapitalGamma]3//.varRep/.disentangled,{\[Tau],0,Min[n\[Tau],1]}]]/.DerRep;
-Gqexp = Normal[Series[Gq//.varRep/.disentangled,{\[Tau],0,Min[n\[Tau],1]}]]/.DerRep;
+If[!ON, 
+	\[CapitalGamma]4exp = Normal[Series[\[CapitalGamma]4//.varRep/.disentangled,{\[Tau],0,Min[n\[Tau],1]}]]/.DerRep;
+	\[CapitalGamma]3exp = Normal[Series[\[CapitalGamma]3//.varRep/.disentangled,{\[Tau],0,Min[n\[Tau],1]}]]/.DerRep;
+	Gqexp = Normal[Series[Gq//.varRep/.disentangled,{\[Tau],0,Min[n\[Tau],1]}]]/.DerRep;
+	
+	propExpand[i_] := (Minimal[1/Gq[[i,i]]] + p (grad[Minimal[1/Gq[[i,i]]]/.{q->p+q},p,q]) + p^2 FullSimplify[lap[Minimal[1/Gq[[i,i]]]/.{q->p+q},p,q]]) /.DerRep/.propRep;
+	propSeries = {gs[p+q] ->  propExpand[1], gp[p+q] -> propExpand[2]};
+
+	G[r_] = Gqexp /. propRep /. q->r /. {gp->gp[r], gs->gs[r]};
+	G[q] = G[q]/.{gp[q]->gp,gs[q]->gs};
+	];
 
 
-propExpand[i_] := (Minimal[1/Gq[[i,i]]] + p (grad[Minimal[1/Gq[[i,i]]]/.{q->p+q},p,q]) + p^2 FullSimplify[lap[Minimal[1/Gq[[i,i]]]/.{q->p+q},p,q]]) /.DerRep/.propRep;
-propSeries = {gs[p+q] ->  propExpand[1], gp[p+q] -> propExpand[2]};
-
-
-G[r_] = Gqexp /. propRep /. q->r /. {gp->gp[r], gs->gs[r]};
-G[q] = G[q]/.{gp[q]->gp,gs[q]->gs};
+If[!ON,
+	If[BooleanQ[strict] && strict,
+	Apply[(\[CapitalGamma]3sq[#1,#2,#3,#4,#5,#6] = FullSimplify[ExpandAll[Series[\[CapitalGamma]3exp[[#1,#2,#3]]\[CapitalGamma]3exp[[#4,#5,#6]],{\[Tau],0,1}]] /.{d[x_,y_]^2->0,d[x_,y_] d[z_,v_]->0}])&,Tuples[Table[Range[2],{i,1,6}]],1],
+	Apply[(\[CapitalGamma]3sq[#1,#2,#3,#4,#5,#6] = FullSimplify[Series[\[CapitalGamma]3exp[[#1,#2,#3]]\[CapitalGamma]3exp[[#4,#5,#6]],{\[Tau],0,1}]])&,Tuples[Table[Range[2],{i,1,6}]],1];
+	];
+];
 
 
 G2flow[i0_,j0_, order_] := Block[{tadpole,Eval,bubble,res},
 tadpole = SeriesCoefficient[-1/2 Tr[\[CapitalGamma]4exp[[i0,j0]].G[q].G[q]],{\[Tau],0,order/2}];
-bubble = SeriesCoefficient[ Tr[\[CapitalGamma]3exp[[i0]].G[q+p].Transpose[\[CapitalGamma]3exp[[j0]]].G[q].G[q]],{\[Tau],0,order/2}];
-Eval[diag_] := SeriesCoefficient[diag /. propSeries/. {d[r_,r_]->r^2,d[p,q] -> p q/Sqrt[dim]},{p,0,2}];
+(*bubble = SeriesCoefficient[ Tr[\[CapitalGamma]3exp[[i0]].G[q+p].Transpose[\[CapitalGamma]3exp[[j0]]].G[q].G[q]],{\[Tau],0,order/2}];*)
+bubble = SeriesCoefficient[ Sum[\[CapitalGamma]3sq[i0,i1,i2,j0,i4,i3] G[q+p][[i2,i3]]G[q][[i4,i5]]G[q][[i5,i1]],{i1,1,2},{i2,1,2},{i3,1,2},{i4,1,2},{i5,1,2}],{\[Tau],0,order/2}];
+Eval[diag_] := SeriesCoefficient[diag /. propSeries/. {d[r_,r_]->r^2,d[p,q] -> p q/Sqrt[d]},{p,0,2}];
 
 res = Eval[tadpole]+Eval[bubble];
 If[order==1, res = res/Sqrt[8]];
 
 Return[D[R[\[Lambda],q^2],\[Lambda]]Collect[res,{1/gs,1/gp},Simplify]];
 ];
-
-
-a = G2flow[1,1,2];
-
-
-EvAt\[Rho]0[a]
-
-
-Definition[EvAt\[Rho]0]
-
-
-EvAt\[Rho]02[f_]:= Block[{},
-propagators = Normal[Simplify[{gs^(ii_) -> (g^(1+ii)Series[gs^-1/.propReverse,{\[Rho],0,1}]), gp^ii_ ->(g^(1+ii)Series[gp^-1/.propReverse,{\[Rho],0,1}])}/. Zs[0]->Zp[0] /.(R[\[Lambda],q^2]+V[0]+q^2 Zp[0])->g]];
-zets = {Zs->(Zp[0] +# Zs'[0]&), Subscript[Zs, 1]->(Subscript[Zp, 1][0]+# Subscript[Zs, 1]'[0]&),T->((Zs'[0]-Zp'[0])/4 + # T'[0]&)};
-Return[Series[f/.propagators/.zets,{\[Rho],0,0}]]];
-
-
-b=EvAt\[Rho]02[a]
-
-
-FullSimplify[Expand[Simplify[dim (R[\[Lambda],q^2]+V[0]+q^2 Zp[0])^5 Collect[SeriesCoefficient[b,{\[Rho],0,-1}],{g},Simplify]/.propReverse]]]
 
 
 If[!ON,
@@ -789,10 +766,11 @@ If[!ON,
 		AppendTo[flowEquations, {Zp[\[Rho]], \[Eta] Zp[\[Rho]]+(-2+d+\[Eta]) \[Rho] Zp'[\[Rho]], flowZ2}];];
 
 	If[!LPA && n\[Tau]>0,
-		flowZ11 = G2flow[1,1,2];
+		yterm = (flowZ1-flowZ2)/(2\[Rho]^2);
+		flowZ11 = G2flow[1,1,2] + yterm;
 		AppendTo[flowEquations, {Subscript[Zs, 1][\[Rho]], (2d-4+3\[Eta]) Subscript[Zs, 1][\[Rho]] + (-2+d+\[Eta]) \[Rho] Subscript[Zs, 1]'[\[Rho]], flowZ11}];
 		
-		flowZ21 = G2flow[2,2,2];
+		flowZ21 = G2flow[2,2,2] - yterm;
 		AppendTo[flowEquations, {Subscript[Zp, 1][\[Rho]], (2d-4+3\[Eta]) Subscript[Zp, 1][\[Rho]] + (-2+d+\[Eta]) \[Rho] Subscript[Zp, 1]'[\[Rho]], flowZ21}];
 		
 		flowT = G2flow[1,2,1];
@@ -801,7 +779,35 @@ If[!ON,
 ];
 
 
+(*on2 = ONSym[flowZ11];
+on3 = ONSym[flowZ21];
+Collect[(on2 * gs^6*gp^6)/(R^(1,0))[\[Lambda],q^2]/. gs \[Rule] gp+q^2 (Zs[\[Rho]]-Zp[\[Rho]])+2 \[Rho] V'[\[Rho]],gp,Simplify]
+Collect[(on3 * gs^6*gp^6)/(R^(1,0))[\[Lambda],q^2]/. gs \[Rule] gp+q^2 (Zs[\[Rho]]-Zp[\[Rho]])+2 \[Rho] V'[\[Rho]],gp,Simplify]*)
+
+
 (* ::Subsubsection::Closed:: *)
+(*Vertices in minimal configuration - for pure O(N) models only*)
+
+
+If[ON,
+	M\[CapitalGamma]3 = Simplify[Minimal[Clean[{p,q,r}][raw\[CapitalGamma]3[p,q,r]]]]/. r->-p-q;
+	M\[CapitalGamma]3 = DersCollect[ONSym[M\[CapitalGamma]3/.DerRep]];
+	
+	M\[CapitalGamma]4 = Simplify[Minimal[Clean[{p,q,r,s}][raw\[CapitalGamma]4[p,q,r,s]]]]/. {q->-p, r->q, s->-q};
+	M\[CapitalGamma]4 = DersCollect[ONSym[M\[CapitalGamma]4/.DerRep]];
+];
+
+
+(*If[!ON && !LPA,
+	M\[CapitalGamma]5 = Simplify[Minimal[Clean[{p,q,r,s,t}][raw\[CapitalGamma]5[p,q,r,s,t]]]];
+	M\[CapitalGamma]5 = DersCollect[M\[CapitalGamma]5];]*)
+
+
+(* ::Text:: *)
+(*For flows of both Z and Y we have two contributing diagrams: tadpole with one \[CapitalGamma]4 vertex and bubble with two \[CapitalGamma]3 vertices.*)
+
+
+(* ::Subsubsection:: *)
 (*Flow of Z[\[Rho]] - for pure O(N) models only*)
 
 
@@ -810,77 +816,47 @@ If[!ON,
 
 
 If[ON,
-tadpole = Simplify[-1/2(gs^-2 (M\[CapitalGamma]4[[1,1,1,1]]/. {q->-p, r->q, s->-q}) + (n-1) gp^-2 (M\[CapitalGamma]4[[1,1,2,2]]/. {q->-p, r->q, s->-q}) )];
+tadpole = Simplify[-1/2(gs^-2 M\[CapitalGamma]4[[1,1,1,1]] + (n-1) gp^-2 M\[CapitalGamma]4[[1,1,2,2]] )];
 tadpoleDifferentiated = ReplaceProps[lap[tadpole, p, q]];
 
-bubble = Simplify[(M\[CapitalGamma]3[[1,1,1]]/. r->-p-q)^2] gs^-2 (Gs /. q -> q+p) + (n-1) Simplify[(M\[CapitalGamma]3[[1,2,2]]/. r->-p-q)^2] gp^-2 (Gp /. q -> q+p);
+bubble = Simplify[M\[CapitalGamma]3[[1,1,1]]^2] gs^-2 (Gs /. q -> q+p) + (n-1) Simplify[M\[CapitalGamma]3[[1,2,2]]^2] gp^-2 (Gp /. q -> q+p);
 bubbleDifferentiated = ReplaceProps[lap[bubble, p, q]];
 
-Zflow = Dimensionless[\!\(\*SuperscriptBox[\(R\), 
+Zflow = \!\(\*SuperscriptBox[\(R\), 
 TagBox[
 RowBox[{"(", 
 RowBox[{"1", ",", "0"}], ")"}],
 Derivative],
-MultilineFunction->None]\)[\[Lambda],q^2] Collect[(tadpoleDifferentiated + bubbleDifferentiated), {1/gs, 1/gp}, FullSimplify]/.propReverse];
+MultilineFunction->None]\)[\[Lambda],q^2] Collect[(tadpoleDifferentiated + bubbleDifferentiated), {1/gs, 1/gp}, FullSimplify]/.propReverse;
 
 If[n\[Phi]==0,
-	ZEquation = {Z[\[Rho]], \[Eta] Z[\[Rho]]+(-2+d+\[Eta]) \[Rho] Z'[\[Rho]], Zflow/.DerRep},
+	ZEquation = {Zs[\[Rho]], \[Eta] Zs[\[Rho]]+(-2+d+\[Eta]) \[Rho] Zs'[\[Rho]], Zflow/.DerRep},
 	ZEquation = {Z, \[Eta], Zflow /. DerRep /. \[Rho] -> \[Kappa]};
 ];
 AppendTo[flowEquations, ZEquation];
 ];
 
 
-(* ::Subsubsection::Closed:: *)
-(*Flow of T[\[Rho]] from \[CapitalGamma](2) (not used)*)
-
-
-(*If[!ON && n\[Tau]>0,
-tadpoleT = -1/2 Sum[(\[CapitalGamma]4[[1,2,i,j]]/. {q->-p,r->q,s->-q})Gq[[i,k]]Gq[[k,j]],{i,1,2},{j,1,2},{k,1,2}] ;
-tadpoleExpanded = Minimal[SeriesCoefficient[tadpoleT/\[Phi][1],{\[Phi][2],0,1}]];
-tadpoleDer = lap[tadpoleExpanded,p,q];
-
-bubbleT = Sum[(\[CapitalGamma]3[[1,i,m]]/. {r->-p-q}) Gq[[i,j]] Gq[[j,k]] (\[CapitalGamma]3[[2,k,l]]/. {r->-p-q}) (Gq[[l,m]]/. q-> p+q),{i,1,2},{j,1,2},{k,1,2},{l,1,2},{m,1,2}];
-bubbleExpanded = Minimal[SeriesCoefficient[bubbleT/\[Phi][1],{\[Phi][2],0,1}]];
-bubbleDer = lap[bubbleExpanded,p,q];
-
-Tflow = Dimensionless[(R^(1,0))[\[Lambda],q^2] (tadpoleDer+bubbleDer)];
-TEquation = {T[\[Rho]], (d-2+2\[Eta]) T[\[Rho]]+(-2+d+\[Eta]) \[Rho] T'[\[Rho]], Tflow/.DerRep};
-AppendTo[flowEquations, TEquation];
-];*)
-
-
-(* ::Subsubsection::Closed:: *)
+(* ::Subsubsection:: *)
 (*Flow equations for Y[\[Rho]] - for pure O(N) models only*)
 
 
 If[n\[Phi]==0 && ON,
-	If[ON,
-		Ytadpole = Collect[(tadpole-(-1/2((M\[CapitalGamma]4[[2,2,1,1]]/. {q->-p, r->q, s->-q}) gs^-2 + (M\[CapitalGamma]4[[2,2,2,2]]/. {q->-p, r->q, s->-q}) gp^-2 + 
-			(n-2) (M\[CapitalGamma]4[[2,2,3,3]]/. {q->-p, r->q, s->-q}) gp^-2)))/(2\[Rho]) /. propRep,{gs,gp}, Simplify],
-	
-		Ytadpole = Collect[(tadpole-(-1/2((M\[CapitalGamma]4[[2,2,1,1]]/. {q->-p, r->q, s->-q}) gs^-2 + (M\[CapitalGamma]4[[2,2,2,2]]/. {q->-p, r->q, s->-q}) gp^-2)))/(2\[Rho])
-			 /. propRep,{gs,gp}, Simplify];
-	];
+	Ytadpole = Collect[-1/2(M\[CapitalGamma]4[[2,2,1,1]] gs^-2 + M\[CapitalGamma]4[[2,2,2,2]] gp^-2 + (n-2) M\[CapitalGamma]4[[2,2,3,3]] gp^-2) /. propRep,{gs,gp}, Simplify];
 	YtadpoleDifferentiated = ReplaceProps[lap[Ytadpole, p, q]];
 
-	Ybubble = Simplify[(bubble- (M\[CapitalGamma]3[[2,2,1]]/. r->-p-q)^2 (gp^-2 (Gs /. q -> q+p)) - (M\[CapitalGamma]3[[2,1,2]]/. r->-p-q)^2 (gs^-2(Gp /. q -> q+p)))/(2\[Rho])];
+	Ybubble = Simplify[ M\[CapitalGamma]3[[2,2,1]]^2] (gp^-2 (Gs /. q -> q+p)) + Simplify[M\[CapitalGamma]3[[2,1,2]]^2] (gs^-2(Gp /. q -> q+p));
 	YbubbleDifferentiated = ReplaceProps[lap[Ybubble, p, q]];
 
 	Yflow = YtadpoleDifferentiated + YbubbleDifferentiated;
-	YflowSimplified = Dimensionless[\!\(\*SuperscriptBox[\(R\), 
+	YflowSimplified = \!\(\*SuperscriptBox[\(R\), 
 TagBox[
 RowBox[{"(", 
 RowBox[{"1", ",", "0"}], ")"}],
 Derivative],
-MultilineFunction->None]\)[\[Lambda],q^2] Collect[Yflow, {1/gs, 1/gp}, Simplify]/. propReverse ];
+MultilineFunction->None]\)[\[Lambda],q^2] Collect[Yflow, {1/gs, 1/gp}, Simplify]/. propReverse ;
 	
-	AppendTo[flowEquations, {Y[\[Rho]], (d-2+2\[Eta]) Y[\[Rho]] + (-2+d+\[Eta]) \[Rho] Y'[\[Rho]], YflowSimplified /. DerRep}];
-
-	If[!LPA,
-		flowY\[Rho]0 = Collect[EvAt\[Rho]0[YflowSimplified /.DerRep]/.{r[y] + V[0] + y Z[0] -> g}, {g^-1}, FullSimplify] /. g -> r[y] + V[0] + y Z[0];
-		AppendTo[flowEquations, {Y[0], (d-2+2\[Eta]) Y[0], flowY\[Rho]0/.DerRep}];
-	]
+	AppendTo[flowEquations, {Zp[\[Rho]], \[Eta] Zp[\[Rho]] + (-2+d+\[Eta]) \[Rho] Zp'[\[Rho]], YflowSimplified /. DerRep}];
 ];
 
 
@@ -897,10 +873,12 @@ If[n\[Tau]==0,
 If[LPA,
 	flowEquations[[All,2;;3]] = flowEquations[[All,2;;3]] /. {Z->(1&)};
 	flowEquations = flowEquations /. {T->(T&),Y->(Y&),Z->(Z&)}];
+
+
 If[!LPA,
 	Add\[Rho]0Eq[f_] := Block[{\[Rho]0eval, newf = f},
 		newf[[3]] = Dimensionless[f[[3]]/.propReverse];
-		If[MemberQ[{V[\[Rho]],Subscript[W, 1][\[Rho]],Subscript[W, 2][\[Rho]],Zs[\[Rho]],T[\[Rho]]},f[[1]]], 
+		If[MemberQ[{V[\[Rho]],Subscript[W, 1][\[Rho]],Subscript[W, 2][\[Rho]],Zs[\[Rho]], Subscript[Zs,1][\[Rho]],T[\[Rho]]},f[[1]]], 
 			\[Rho]0eval = Dimensionless[EvAt\[Rho]0[f[[3]]]/.propReverse];
 			AppendTo[newf, \[Rho]0eval];];
 		Return[newf]];
@@ -919,13 +897,10 @@ If[!LPA,
 (*Replacements for O(N) models without anisotropy*)
 
 
-repJ ={YY->Y, W[\[Rho]_]->0,\!\(\*SuperscriptBox[\(W\), 
-TagBox[
-RowBox[{"(", "i_", ")"}],
-Derivative],
-MultilineFunction->None]\)[\[Rho]_]->0};
-repA0={};
-repA = {\!\(\*SuperscriptBox[\(V\), 
+If[ON,
+	repJ ={YY->Y, W[\[Rho]_]->0, W'[\[Rho]_]->0, W''[\[Rho]_]->0};
+	repA0 = {y^p_. -> y^(p/2)};
+	repA = {\!\(\*SuperscriptBox[\(V\), 
 TagBox[
 RowBox[{"(", "i_", ")"}],
 Derivative],
@@ -939,21 +914,24 @@ SubscriptBox[\(W\), \(i_\)],
 TagBox[
 RowBox[{"(", "m_", ")"}],
 Derivative],
-MultilineFunction->None]\)[\[Rho]_]->0,V[\[Rho]_]->U'[\[Rho]],Z[\[Rho]_]->Z[\[Rho]]+2 \[Rho] Y[\[Rho]], Z'[\[Rho]_]->2 Y[\[Rho]]+2 \[Rho] Derivative[1][Y][\[Rho]]+Derivative[1][Z][\[Rho]],Z''[\[Rho]_]->4 Derivative[1][Y][\[Rho]]+2 \[Rho] Y''[\[Rho]]+Z''[\[Rho]],n->2, r[y]->y r[y], r'[y]->r[y] + y r'[y], r''[y]->2 r'[y]+y r''[y]};
-repProp = {y r[y]+y Z[\[Rho]_]+Derivative[1][U][\[Rho]_]->gp,y (r[y]+ Z[\[Rho]_])+Derivative[1][U][\[Rho]_]->gp,y r[y]+y (2 \[Rho] Y[\[Rho]_]+Z[\[Rho]_])+Derivative[1][U][\[Rho]_]+2 \[Rho] U''[\[Rho]_]->gs,y (r[y]+2 \[Rho] Y[\[Rho]_]+Z[\[Rho]_])+Derivative[1][U][\[Rho]_]+2 \[Rho] U''[\[Rho]_]->gs};
+MultilineFunction->None]\)[\[Rho]_]->0,V[\[Rho]_]->U'[\[Rho]],Zs->(Z[#]+2 # Y[#]&),Zp->(Z[#]&),n->2, r[y]->y r[y], r'[y]->r[y] + y r'[y], r''[y]->2 r'[y]+y r''[y]};
+	repProp = {y r[y]+y Z[\[Rho]_]+Derivative[1][U][\[Rho]_]->gp, y (r[y]+ Z[\[Rho]_])+Derivative[1][U][\[Rho]_]->gp,y r[y]+y (2 \[Rho] Y[\[Rho]_]+Z[\[Rho]_])+Derivative[1][U][\[Rho]_]+2 \[Rho] U''[\[Rho]_]->gs,y (r[y]+2 \[Rho] Y[\[Rho]_]+Z[\[Rho]_])+Derivative[1][U][\[Rho]_]+2 \[Rho] U''[\[Rho]_]->gs};
+	];
 
 
 (* ::Text:: *)
 (*Replacements for O(2) models with anisotropy*)
 
 
-repJ ={ YY->(Y[#]&)};
-repA0 = {y^p_. -> y^(p/2)};
-repA = {V->(U'[#]&),Subscript[W, i_]/;i==1->(W[#]&),Subscript[W, i_]/;i>1->(0&), 
-	Subscript[Zp, i_]->(0&),Subscript[Zs, i_]->(0&), T->(Y[#]/2&),
-	(2 r[y]-\[Eta] r[y]-2 y Derivative[1][r][y]) -> (-y \[Eta] r[y]-2 y^2 Derivative[1][r][y]), r->(# r[#]&),Zp->(Z[#]&), Zs->(Z[#] +2 # Y[#]&), dim->d};
-repProp = {y r[y]+y Z[\[Rho]]+Derivative[1][U][\[Rho]_]+ 2 \[Rho] W[\[Rho]]->gp,y (r[y]+ Z[\[Rho]]) +Derivative[1][U][\[Rho]_]+ 2 \[Rho] W[\[Rho]]->gp,
-	y r[y]+y Z[\[Rho]]+ y 2 \[Rho] Y[\[Rho]]+Derivative[1][U][\[Rho]_]+2 \[Rho] U''[\[Rho]_]->gs, y r[y]+y (Z[\[Rho]]+  2 \[Rho] Y[\[Rho]])+Derivative[1][U][\[Rho]_]+2 \[Rho] U''[\[Rho]_]->gs, (y (r[y]+2 \[Rho] Y[\[Rho]]+Z[\[Rho]])+Derivative[1][U][\[Rho]]+2 \[Rho] (U^\[Prime]\[Prime])[\[Rho]])->gs};
+If[!ON,
+	repJ ={ YY->(Y[#]&)};
+	repA0 = {y^p_. -> y^(p/2)};
+	repA = {V->(U'[#]&),Subscript[W, i_]/;i==1->(W[#]&),Subscript[W, i_]/;i>1->(0&), 
+		Subscript[Zp, i_]->(0&),Subscript[Zs, i_]->(0&), T->(Y[#]/2&),
+		(2 r[y]-\[Eta] r[y]-2 y Derivative[1][r][y]) -> (-y \[Eta] r[y]-2 y^2 Derivative[1][r][y]), r->(# r[#]&),Zp->(Z[#]&), Zs->(Z[#] +2 # Y[#]&), dim->d};
+	repProp = {y r[y]+y Z[\[Rho]]+Derivative[1][U][\[Rho]_]+ 2 \[Rho] W[\[Rho]]->gp,y (r[y]+ Z[\[Rho]]) +Derivative[1][U][\[Rho]_]+ 2 \[Rho] W[\[Rho]]->gp,
+		y r[y]+y Z[\[Rho]]+ y 2 \[Rho] Y[\[Rho]]+Derivative[1][U][\[Rho]_]+2 \[Rho] U''[\[Rho]_]->gs, y r[y]+y (Z[\[Rho]]+  2 \[Rho] Y[\[Rho]])+Derivative[1][U][\[Rho]_]+2 \[Rho] U''[\[Rho]_]->gs, (y (r[y]+2 \[Rho] Y[\[Rho]]+Z[\[Rho]])+Derivative[1][U][\[Rho]]+2 \[Rho] (U^\[Prime]\[Prime])[\[Rho]])->gs};
+	]
 
 
 (* ::Text:: *)
@@ -996,22 +974,23 @@ MultilineFunction->None]\)[\[Rho]])/(2 (y r[y]+2 y \[Rho] YY[\[Rho]]+y Z[\[Rho]]
 
 If[debug,
 fullA[f_]:=(f/(2y)/.repA0/.repA /. repProp);
-fullJ[f_]:=(f/.repJ/.repProp);
-WflowA = fullA[dimlessFlowEquations[[2,3]]];
-ZflowA = fullA[dimlessFlowEquations[[4,3]]];
-YflowA = fullA[(dimlessFlowEquations[[3,3]]-dimlessFlowEquations[[4,3]])/(2\[Rho])];
-WflowJ = fullJ[flowW1J];
+fullJ[f_]:=(f//.repJ/.repProp);
+If[ON,
+	WflowA = 0;
+	ZflowA = fullA[dimlessFlowEquations[[3,3]]];
+	YflowA = fullA[(dimlessFlowEquations[[2,3]]-dimlessFlowEquations[[3,3]])/(2\[Rho])],
+	WflowA = fullA[dimlessFlowEquations[[2,3]]];
+	ZflowA = fullA[dimlessFlowEquations[[4,3]]];
+	YflowA = fullA[(dimlessFlowEquations[[3,3]]-dimlessFlowEquations[[4,3]])/(2\[Rho])];
+	WflowJ = fullJ[flowW1J];];
 ZflowJ = fullJ[flowZJ];
 YflowJ = fullJ[flowYJ];
 gpsCoef[f_,i_,j_] := SeriesCoefficient[SeriesCoefficient[f,{gp,0,-i}],{gs,0,-j}];
 
-Print[Simplify[FullSimplify[Simplify[(WflowA-WflowJ)/(2 vd y^(1/2 (d)) (\[Eta] r[y]+2 y Derivative[1][r][y]))]/.(propReverse/.repA/.q^2->y/.R[\[Lambda],y]->y r[y])]]];
-Print[Collect[ZflowA-ZflowJ,{gs,gp},Simplify]];
-Print[Collect[YflowA-YflowJ,{gs,gp},Simplify]];]
-
-
-(*0==Collect[((flowEquations[[2,3]]/.repA0/.repA/.repProp)-(2\[Rho] flowEquations[[3,3]]/.repA/.repProp)-((flowZJ/.repJ))/.repProp),{gs,gp},Simplify]
-0==Collect[(flowEquations[[3,3]]/.repA0/.repA/.repProp)-((flowYJ/.repJ))/.repProp,{gs,gp},Simplify]*)
+If[!ON,
+	Print[Simplify[FullSimplify[Simplify[(WflowA-WflowJ)/(2 vd y^(1/2 (d)) (\[Eta] r[y]+2 y Derivative[1][r][y]))]/.(propReverse/.repA/.q^2->y/.R[\[Lambda],y]->y r[y])]]]];
+Print[FullSimplify[Collect[ZflowA-ZflowJ,{gs,gp},Simplify]/.(propReverse/.repA/.q^2->y/.R[\[Lambda],y]->y r[y])]];
+Print[FullSimplify[Collect[YflowA-YflowJ,{gs,gp},Simplify]/.(propReverse/.repA/.q^2->y/.R[\[Lambda],y]->y r[y])]];]
 
 
 (* ::Subsection::Closed:: *)
@@ -1084,7 +1063,7 @@ GCollect[CReady[flowEquations[[x,3]]]]
 Remove[x];*)
 
 
-(* ::Subsection::Closed:: *)
+(* ::Subsection:: *)
 (*Finite grid representation for the equations*)
 
 
@@ -1110,9 +1089,12 @@ Derivative],
 MultilineFunction->None]\)[\[Rho]/eps]];
 	];
 ];
-gridFlowEquations = dimlessFlowEquations /. finiteGrid /. dim->d;
+gridFlowEquations = dimlessFlowEquations /. finiteGrid;
 ];
 
 
-filename = GetEquationsFileName[task, n\[Phi], n\[Tau]];
+If[BooleanQ[LPA]&&LPA, comment="LPA"];
+If[BooleanQ[strict]&&strict, comment="strict",comment=""];
+
+filename = GetEquationsFileName[task, n\[Phi], n\[Tau], comment];
 Export[filename, gridFlowEquations];

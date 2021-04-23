@@ -16,7 +16,7 @@ If[!NumberQ[gridSize],
 	gridSize = 120];
 	
 SetAttributes[gridSize,{Protected,Constant}];
-potentialMinimum = Floor[50/60*gridSize];
+potentialMinimum = Floor[57/60*gridSize];
 Protect[potentialMinimum];
 
 
@@ -127,6 +127,11 @@ RowBox[{"(", "n", ")"}],
 Derivative],
 MultilineFunction->None]\)[ix_] /; ix==gridSize-1 -> Sum[b2[[k]]*ff[ix-k+2],{k, 1, Length[b2]}]];
 ];]
+AppendTo[repderborder,\!\(\*SuperscriptBox[\(f_\), 
+TagBox[
+RowBox[{"(", "4", ")"}],
+Derivative],
+MultilineFunction->None]\)[0]->(56 f[0]-333 f[1]+852 f[2]-1219 f[3]+1056 f[4]-555 f[5]+164 f[6]-21 f[7])/6];
 
 
 (* ::Subsubsection::Closed:: *)
@@ -160,7 +165,7 @@ RowBox[{"(", "i_", ")"}],
 Derivative],
 MultilineFunction->None]\)[\[Rho]_]->0, t[\[Rho]_] -> T};
 ConstRep[dim_, \[Rho]max_, alpha_:defaultAlpha] := 
-	{d->N[dim], vd->1,
+	{d->N[dim], vd->1,Subscript[zp, 1][0]->Subscript[zs, 1][0],
 	eps->\[Rho]max/gridSize, \[Alpha]->alpha, z[zNormalization]->1, zp[zNormalization]->1, zs[zNormalization]->1};
 
 
@@ -196,8 +201,9 @@ Return[DeleteCases[Map[Approximate,integrands],Null]];
 (*Generates weights and evaluation points Gauss - Legendre integration for n \[Element] [1, MaxPointsLegendre].*)
 
 
+Block[{i, legendrePoints,roots,weights,rootsLegendre,weightGL},
 MAXPOINTSLEGENDRE = 30;
-rootsLegendre[n_] := N[Solve[LegendreP[n, x] == 0, x]] (* generates roots of the n-th Legendre poly. *) 
+rootsLegendre[n_] := N[Solve[LegendreP[n, x] == 0, x]]; (* generates roots of the n-th Legendre poly. *)
 weightGL[n_, x_] := N[2/((1-x^2) D[LegendreP[n, x], x]^2)];
 For[legendrePoints=1, legendrePoints <= MAXPOINTSLEGENDRE, legendrePoints++,
 	roots = rootsLegendre[legendrePoints];
@@ -205,6 +211,7 @@ For[legendrePoints=1, legendrePoints <= MAXPOINTSLEGENDRE, legendrePoints++,
 	GLTable[legendrePoints] = Table[{w[i] -> Chop[N[weights[[i]]]], N[roots[[i,1]]]},
 		{i, 1, Length[rootsLegendre[legendrePoints]]}]
 	];
+];
 
 
 (* ::Text:: *)
@@ -212,10 +219,10 @@ For[legendrePoints=1, legendrePoints <= MAXPOINTSLEGENDRE, legendrePoints++,
 (*GetIntegral - performs Gauss - Legendre integration of function split into parts specified in IntegralConfigurations*)
 
 
-GLIntegral[f_,a_,b_,pointsLegendre_]:= (b-a)/2 Sum[(f[(a+b)/2 + 1/2 (b-a) x] w[i] /. GLTable[pointsLegendre][[i]]),{i, 1, pointsLegendre}]
+GLIntegral[f_,a_,b_,pointsLegendre_]:= Module[{i},(b-a)/2 Sum[(f[(a+b)/2 + 1/2 (b-a) x] w[i] /. GLTable[pointsLegendre][[i]]),{i, 1, pointsLegendre}]]
 
 
-GetIntegral[f_] := Sum[GLIntegral[f,IntegralConfigurations[[i,1]],IntegralConfigurations[[i,2]],IntegralConfigurations[[i,3]]],{i,1,Length[IntegralConfigurations]}]
+GetIntegral[f_] := Module[{i},Sum[GLIntegral[f,IntegralConfigurations[[i,1]],IntegralConfigurations[[i,2]],IntegralConfigurations[[i,3]]],{i,1,Length[IntegralConfigurations]}]]
 
 
 (* ::Subsection::Closed:: *)
@@ -402,7 +409,7 @@ DropOutliers[assoc_,min_,max_] := Block[{filter, a=Association[]},
 
 
 IntegrateEquations[integrandsList_]:=
-Block[{i, j, equationsList={}, equation, parameters={}, function, scaling, integrand, integrand0, minPoint, reppedEquation},
+Block[{fff,i, j, equationsList={}, equation, parameters={}, function, scaling, integrand, integrand0, minPoint, reppedEquation},
 For[i=1, i<=Length[integrandsList], i++,
 	(* We identify the components of integrandsList *)
 	function = integrandsList[[i, 1]];
@@ -430,7 +437,7 @@ For[i=1, i<=Length[integrandsList], i++,
 	
 	(* Iteration over \[Rho] grid *)
 	(* If `function` is not a function of \[Rho] but constant then no iteration is performed *)
-	If[MatchQ[function,f_[\[Rho]_]],
+	If[MatchQ[function,fff_[\[Rho]_]],
 		minPoint = 1;
 		If[Length[integrandsList[[i]]]==4, minPoint=0];
 		Map[eqRep,Range[minPoint,gridSize]],
@@ -455,27 +462,57 @@ Return[equationsList];
 (*Returns a guess interpolated from supplied one onto grid with specified number of points together with new position for zNormalization point. *)
 
 
-AdjustNumberOfPoints[guess_, numberOfPoints_,zNormalization_]:= Block[{newGuess, scale, functions, guessLength, Interpolate,zDeviation},
-functions = {v,z,yy};
-
+AdjustNumberOfPoints[guess_, numberOfPoints_, zNormalization_, \[Rho]Max_]:= Block[{guessRepar,newGuess, scale, functions, 
+	guessLength, Interpolate,zDeviation, oldFunctions,interpolation,Reparametrize},
+functions = {v,zs,zp};
+oldFunctions = DeleteCases[DeleteDuplicates[ guess[[All,1,0]]],Symbol];
 guessLength = Length[Position[guess,v[i_]]]-1;
+
+guessRepar = guess;
+If[oldFunctions == {v,z,yy},
+	Reparametrize[f_] := Block[{j},
+		If[MatchQ[f,v[i_]->c_?NumberQ], Return[f]];
+		
+		If[MatchQ[f,z[i_]->c_?NumberQ], Return[zs[f[[1,1]]]->f[[2]] ]];
+		
+		If[MatchQ[f,yy[i_]->c_?NumberQ], 
+			j = f[[1,1]];
+			Return[zp[j]->(z[j]-2 j eps yy[j])/. guess /. {z[i_]->1, eps->\[Rho]Max/guessLength}];
+		];
+		Return[f];];
+	guessRepar = Map[Reparametrize,guess];
+];
 
 (* Function for linear interpolation onto new grid *)
 scale = guessLength/numberOfPoints;
-(* Construction of a new grid representation *)
-interpolation[i_] := Interpolation[Table[{j, functions[[i]][j]},{j,0,guessLength}] /.guess /. z[k_]->1,InterpolationOrder->4];
 
-newGuess = Table[functions[[i]][j] -> interpolation[i][j*scale]/(z[zNormalization]/.guess/.z[k_]->1), {i,1,Length[functions]}, {j,0,numberOfPoints}];
+(* Construction of a new grid representation *)
+interpolation := Map[Interpolation[Table[{j, #[j]},{j,0,guessLength}] /. guessRepar /. {zp[k_] ->1,zs[k_]->1},InterpolationOrder->4]&,functions];
+
+newGuess = Table[functions[[i]][j] -> interpolation[[i]][j*scale]/(zs[zNormalization]/.guessRepar/.zs[k_]->1), {i,1,Length[functions]}, {j,0,numberOfPoints}];
 newGuess = Flatten[newGuess,1];
 
 (* Remove zNormalization from FP specification *)
-newGuess = DeleteCases[newGuess, z[zNormalization]->c_];
+newGuess = DeleteCases[newGuess, zs[zNormalization]->c_];
+newGuess = DeleteCases[newGuess, zp[0]->c_];
 
 (* Add anomalous dimension \[Eta] *)
 AppendTo[newGuess,\[Eta]->(\[Eta]/.guess)];
 
 Return[newGuess];
 ]
+
+
+MatchQ[f->1,f_->c_?NumberQ]
+
+
+fu = v[x]->1;
+
+
+zs[fu[[1,1]]]->fu[[2]]
+
+
+v[x][[1]]
 
 
 (* ::Subsubsection::Closed:: *)
@@ -530,15 +567,33 @@ ListPlot[Transpose[Table[{v[i],z[i],yy[i]},{i,0,gridSize}]/.fp/.z[k_]->1],
 	PlotLegends->{"V","Z","Y"},PlotLabel->"\[Eta]="<>ToString[\[Eta]/.fp],AxesLabel->{"i","f[i]"}]];
 
 
-PlotFixedPoint[fixedPoint_,\[Rho]Max_] := Block[{tabelize,functions, fp=fixedPoint},
-If[MemberQ[Keys[fixedPoint],Y], AppendTo[fp,yy[k_]->(Y/.fp)];];
-tabelize[f_] := Table[{i \[Rho]Max/gridSize, f[i]},{i,0,gridSize}]/.fp/.z[k_]->1;
-functions = Map[tabelize,{v,z,yy}];
-functions[[3,All,2]] = functions[[2,All,2]]- 2 functions[[3,All,1]]*functions[[3,All,2]];
-ListPlot[functions, PlotLegends->{"V",Subscript["Z","\[Sigma]"],Subscript["Z","\[Pi]"]},AxesLabel->{"\[Rho]","f[\[Rho]]"},PlotLabel->"\[Eta]="<>ToString[\[Eta]/.fixedPoint]]];
+PlotFixedPoint[guess_,\[Rho]Max_] := Block[{tabelize, functions= {v,zs,zp}, fp=guess, oldFunctions, guessLength, guessRepar,Reparametrize},
+oldFunctions = DeleteCases[DeleteDuplicates[ guess[[All,1,0]]],Symbol];
+guessLength = Length[Position[guess,v[i_]]]-1;
+
+If[MemberQ[fp[[All,1]],Y], AppendTo[fp,yy[k_]->(Y/.fp)];];
+
+guessRepar = guess;
+If[oldFunctions == {v,z,yy},
+	Reparametrize[f_] := Block[{j},
+		If[MatchQ[f,v[i_]->c_?NumberQ], Return[f]];
+		
+		If[MatchQ[f,z[i_]->c_?NumberQ], Return[zs[f[[1,1]]]->f[[2]] ]];
+		
+		If[MatchQ[f,yy[i_]->c_?NumberQ], 
+			j = f[[1,1]];
+			Return[zp[j]->(z[j]-2 j eps yy[j])/. guess /. {z[i_]->1, eps->\[Rho]Max/guessLength}];
+		];
+		Return[f];];
+	guessRepar = Map[Reparametrize,guess];
+];
+
+tabelize[f_] := Table[{i \[Rho]Max/guessLength, f[i]},{i,0,guessLength}]/.guessRepar/.{z[k_]->1,zs[k_]->1,zp[k_]->1};
+functions = Map[tabelize,functions];
+ListPlot[functions, PlotLegends->{"V",Subscript["Z","\[Sigma]"],Subscript["Z","\[Pi]"]},AxesLabel->{"\[Rho]","f[\[Rho]]"},PlotLabel->"\[Eta]="<>ToString[\[Eta]/.fp]]];
 
 
-(* ::Subsubsection::Closed:: *)
+(* ::Subsubsection:: *)
 (*FindFixedPoint*)
 
 
@@ -546,7 +601,7 @@ ListPlot[functions, PlotLegends->{"V",Subscript["Z","\[Sigma]"],Subscript["Z","\
 (*Finds a fixed point for provided equations*)
 
 
-FindFixedPoint[eqlist_, guess_, constants_]:=
+FindFixedPoint[eqlist_, guess_, constants_,damping_:2]:=
 Block[{solution, eqlistSubstituted, plot, check, guessrep},
 FindFixedPoint::singularEq = "Flow equations singular due to too small regulator prefactor";
 
@@ -561,7 +616,7 @@ If[(\[Alpha] /.constants) < -(v[0]/.guess),
 
 	(* Finds numerical solution *)
 	solution = Quiet[FindRoot[eqlistSubstituted, guessrep,
-					MaxIterations->1000, PrecisionGoal->5, DampingFactor->2],
+					MaxIterations->10000, PrecisionGoal->5, DampingFactor->damping],
 				{FindRoot::lstol}];
 	
 	Return[solution];
@@ -787,7 +842,7 @@ For[i=1, i<=Length[keys], i++,
 	If[MemberQ[Keys[params],"N"], equations = equations /. n -> params["N"]];
 	Print[params];
 	
-	scan = \[Rho]MaxScan[equations, newGuess, params["dim"], params["\[Rho]Max"], params["alpha"], 0.00625*params["\[Rho]Max"], 20];
+	scan = \[Rho]MaxScan[equations, newGuess, params["dim"], params["\[Rho]Max"], params["alpha"], 0.025*params["\[Rho]Max"], 20];
 	
 	If[Length[scan]<2 || !IsFixedPoint[equations, scan[[1]], ConstRep[params["dim"], scan[[2]], params["alpha"]]], 
 		Print["No FP found for "<> ToString[params]];
@@ -826,23 +881,24 @@ Return[fixedPointDict];
 
 FixedPointDimScan[eqlist_, guess_, constants_, d_, initial\[Rho]Max_] := 
 Block[{fixedPointDict=Association[], newGuess=guess, scan,
-	\[Rho]Max=initial\[Rho]Max, step=0.025, steps=0, maxSteps=50, dim=d},
+	\[Rho]Max=initial\[Rho]Max, step=0.05, steps=0, maxSteps=100, dim=d, factor=1.01},
 If[searchTricritical,
 	Print["Searching for tricritical fixed points"],
 	Print["Searching for critical fixed points"]];
 
 While[True,
 	steps++;
-	scan = \[Rho]MaxScan[eqlist, newGuess, dim, \[Rho]Max, constants["alpha"], 0.00625*\[Rho]Max, 20];
+	scan = \[Rho]MaxScan[eqlist, newGuess, dim, \[Rho]Max*factor, constants["alpha"], 0.0125*\[Rho]Max, 20];
 	
 	If[Length[scan]<2 || !IsFixedPoint[eqlist, scan[[1]], ConstRep[dim, scan[[2]], constants["alpha"]]], 
 		Print["No FP found for d="<> ToString[dim]];
-		If[step > 10^-5,
+		If[step > 10^-4,
 			step /= 2;
 			dim += step;
 			Continue[],
 			Break[]];
 		];
+	factor = scan[[2]]/\[Rho]Max;
 	newGuess = scan[[1]];
 	\[Rho]Max = scan[[2]];
 	fixedPointDict[{dim,\[Rho]Max}] = newGuess;
@@ -851,6 +907,88 @@ While[True,
 ];
 	
 Return[fixedPointDict];
+];
+
+
+(* ::Subsubsection::Closed:: *)
+(*Rescale\[Rho]*)
+
+
+Rescale\[Rho][fp_,\[Rho]Max_]:= Block[{min, new, newfp,funcs,points,Inter,Guess},
+	points = Table[i \[Rho]Max/gridSize,{i,0,gridSize}];
+	funcs = DeleteCases[DeleteDuplicates[ fp[[All,1,0]]],Symbol];
+	Inter[f_] := Interpolation[Transpose[{points,Map[f,Range[0,gridSize]]}]/.fp/.h_[k_]->1.];
+	
+	Quiet[min = \[Rho]/. FindRoot[Inter[v][\[Rho]],{\[Rho],\[Rho]Max*potentialMinimum/gridSize}]];
+	new = min*gridSize/potentialMinimum;
+	Guess[f_] := Block[{int,start=1},
+		int = Inter[f];
+		If[f==v,start=0];
+		Return[Table[f[i]->Quiet[int[i*new/gridSize]],{i,start,gridSize}]];
+	];
+	newfp = Flatten[Map[Guess,funcs]];
+	Return[{Append[newfp,\[Eta]->(\[Eta]/.fp)],new}];
+]
+
+
+(* ::Subsubsection::Closed:: *)
+(*MakeDStep*)
+
+
+MakeDStep[eqs_, oldFP_, \[Rho]Max_, dim_, dd_, alpha_] := Block[{der, sm, dG, newFP, new\[Rho],zpart, zpartdG, bound, delta, exps},
+	der = D[eqs,d]/.oldFP/.ConstRep[dim,\[Rho]Max,alpha];
+	der = Drop[der,{gridSize+2}];
+	sm = StabilityMatrix[integrandsListIsotropic,oldFP,ConstRep[dim,\[Rho]Max,alpha]];
+	exps = ExtractExponents[sm];
+	exps[\[Eta]] = \[Eta]/.oldFP;
+	dG = -Quiet[Inverse[sm]].(der /. oldFP /. ConstRep[dim, \[Rho]Max, alpha]);
+	AppendTo[dG,0.]; (* Append no change to \[Eta] *)
+	
+	
+	newFP = oldFP; (* zpart includes also the last point of V *)
+	zpart = oldFP[[gridSize+1;;-2]];
+	zpartdG = dG[[gridSize+1;;-2]];
+	
+	(* delta must be small enough that at any point z is decreasing not more than 1/16. of its value *)
+	bound = zpart/(16 zpartdG); 
+	bound[[1]] = Abs[bound[[1]]]; 
+	bound = Min[Select[bound, #>0&]];
+	delta=dd;
+	While[delta > bound, delta/=2];
+	
+	newFP[[All,2]] = oldFP[[All,2]] - delta dG;
+	
+	{newFP,new\[Rho]} = Rescale\[Rho][newFP,\[Rho]Max];
+	
+	newFP = FindFixedPoint[eqs, newFP, ConstRep[dim-delta, new\[Rho], alpha], 4];
+	Return[{exps, newFP, new\[Rho], dim-delta}];
+];
+
+
+(* ::Subsubsection:: *)
+(*FullDScan*)
+
+
+FullDScan[eqlist_, guess_, d_, dd_, initial\[Rho]Max_, alpha_]:=
+Block[{fixedPointDict=Association[], expDict=Association[], oldFP=guess, newFP, scan, exps,
+	\[Rho]Max=initial\[Rho]Max, steps=0, maxSteps=300, newdim, dim=d, delta, factor=1.01, new\[Rho]},
+
+
+For[steps=0, steps<maxSteps, steps++,
+	If[dim>=1.35, delta=dd, delta=0.01];
+	{exps, newFP, new\[Rho], newdim} = MakeDStep[eqlist, oldFP, \[Rho]Max, dim, delta, alpha];
+	
+	fixedPointDict[{dim,\[Rho]Max}] = oldFP;
+	expDict[dim] = exps;
+	If[!IsFixedPoint[eqlist,newFP,ConstRep[newdim,new\[Rho],alpha]],
+		Break[]];
+	
+	oldFP=newFP;
+	dim=newdim;
+	\[Rho]Max=new\[Rho];
+];
+	
+Return[{fixedPointDict, TransposeAssociation[expDict]}];
 ];
 
 
@@ -959,6 +1097,22 @@ Return[eigenSys]];
 
 
 (* ::Subsubsection::Closed:: *)
+(*ExtractExponents*)
+
+
+ExtractExponents[stabilityMatrix_]:=Block[{eigenvalues,criticalExponents=<| |>},
+eigenvalues = EigenSys[stabilityMatrix][[All,1]];
+
+criticalExponents[e1] = -eigenvalues[[1]];
+criticalExponents[e2] = -eigenvalues[[2]];
+criticalExponents[e3] = -eigenvalues[[3]];
+criticalExponents[e4] = -eigenvalues[[4]];
+criticalExponents[e5] = -eigenvalues[[5]];
+Return[criticalExponents];
+];
+
+
+(* ::Subsubsection::Closed:: *)
 (*GetCriticalExponents*)
 
 
@@ -979,6 +1133,8 @@ criticalExponents[\[Eta]] = \[Eta] /. fixedPoint;
 criticalExponents[e1] = -eigenvaluesIsotropic[[1]];
 criticalExponents[e2] = -eigenvaluesIsotropic[[2]];
 criticalExponents[e3] = -eigenvaluesIsotropic[[3]];
+criticalExponents[e4] = -eigenvaluesIsotropic[[4]];
+criticalExponents[e5] = -eigenvaluesIsotropic[[5]];
 
 If[Length[integrandsListAnisotropic] > 0, 
 	stabilityMatrixAnisotropic = StabilityMatrix[integrandsListAnisotropic, fixedPoint, constants];
@@ -988,6 +1144,7 @@ If[Length[integrandsListAnisotropic] > 0,
 	criticalExponents[y2] = -eigenvaluesAnisotropic[[2]];
 	criticalExponents[y3] = -eigenvaluesAnisotropic[[3]];
 	criticalExponents[y4] = -eigenvaluesAnisotropic[[4]];
+	criticalExponents[y5] = -eigenvaluesAnisotropic[[5]];
 
 	For[j=1, j<=Length[eigenvaluesIsotropic], j++,
 		(* y is the lowest eigenvalue that appears in anisotropic model but not in isotropic *)

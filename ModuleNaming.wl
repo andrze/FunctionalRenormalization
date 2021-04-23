@@ -3,7 +3,7 @@
 EQUATIONSDIRECTORY = "flow_equations/";
 
 
-GetEquationsFileName[task_, fieldOrder_, anisotropyOrder_] :=
+GetEquationsFileName[task_, fieldOrder_, anisotropyOrder_, comment_:""] :=
 	If[MemberQ[ONTASKS,task],
 		StringJoin[{EQUATIONSDIRECTORY,
 			"ON_", If[fieldOrder==0, "functional", {"field", ToString[fieldOrder]}], ".wdx"}],
@@ -11,13 +11,15 @@ GetEquationsFileName[task_, fieldOrder_, anisotropyOrder_] :=
 			If[anisotropyOrder!=0, {task, "_"}, {}],
 			If[fieldOrder==0, "functional", {"field", ToString[fieldOrder]}],
 			If[anisotropyOrder!=0,{"_anisotropy", ToString[anisotropyOrder]},"_isotropic"],
+			If[comment=="","",{"_",ToString[comment]}],
 			".wdx"}]];
 
 
-GetCacheDirectory[task_, fieldOrder_, regulatorName_,LPA_:False] :=
+GetCacheDirectory[task_, fieldOrder_, regulatorName_, LPA_:False, comment_:""] :=
 Block[{directoryName,dirPrefix=task,sufix=""},
 If[task=="regulator", dirPrefix="ON"];
 If[LPA, sufix="_LPA"];
+If[comment!="", sufix="_"<>ToString[comment]];
 
 directoryName = StringJoin[{dirPrefix,"_", 
 	If[fieldOrder==0, "functional", {"field", ToString[fieldOrder]}],
