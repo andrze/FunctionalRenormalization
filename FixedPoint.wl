@@ -1,10 +1,10 @@
 (* ::Package:: *)
 
-(* ::Section::Closed:: *)
+(* ::Section:: *)
 (*Numerical Library*)
 
 
-(* ::Subsection::Closed:: *)
+(* ::Subsection:: *)
 (*Constants*)
 
 
@@ -38,14 +38,14 @@ Protect[IntegralConfigurations];
 
 
 If[!NumberQ[zNormalization],
-	If[LPA,
+	If[MemberQ[{"LPA", "LPA'"},derivativeExpansionOrder],
 		zNormalization = potentialMinimum;
 		zNormalization = 0];
 ];	
 SetAttributes[zNormalization,{Protected,Constant}];
 
 
-(* ::Subsection::Closed:: *)
+(* ::Subsection:: *)
 (*Replacement rules*)
 
 
@@ -144,7 +144,7 @@ Derivative],
 MultilineFunction->None]\)[0]->(56 f[0]-333 f[1]+852 f[2]-1219 f[3]+1056 f[4]-555 f[5]+164 f[6]-21 f[7])/6];
 
 
-(* ::Subsubsection::Closed:: *)
+(* ::Subsubsection:: *)
 (*Shortcuts for replacement*)
 
 
@@ -161,19 +161,6 @@ RowBox[{"(", "m_", ")"}],
 Derivative],
 MultilineFunction->None]\)[\[Rho]_] -> 0};
 NumericDerivatives := (# //. repderborder //.repder)&
-LPArep = {z[\[Rho]_]->1, \!\(\*SuperscriptBox[\(z\), 
-TagBox[
-RowBox[{"(", "i_", ")"}],
-Derivative],
-MultilineFunction->None]\)[\[Rho]_]->0, yy[\[Rho]_]->Y, \!\(\*SuperscriptBox[\(yy\), 
-TagBox[
-RowBox[{"(", "i_", ")"}],
-Derivative],
-MultilineFunction->None]\)[\[Rho]_]->0, \!\(\*SuperscriptBox[\(t\), 
-TagBox[
-RowBox[{"(", "i_", ")"}],
-Derivative],
-MultilineFunction->None]\)[\[Rho]_]->0, t[\[Rho]_] -> T};
 
 If[!NumberQ[zNormalization], 
 	Print["zNormalization should be chosen before defining ConstRep function"]; Quit[]];
@@ -189,26 +176,32 @@ ConstRep[dim_, \[Rho]max_, alpha_:defaultAlpha] :=
 
 
 (* ::Subsubsection::Closed:: *)
-(*MakeLPA*)
+(*MakeLPA & MakeLPAp*)
 
 
 (* ::Text:: *)
-(*Yields integrands in LPA' approximation*)
+(*Returns integrands in LPA approximation*)
 
 
-MakeLPA[integrands_] := Block[{approximate},
+MakeLPA[integrands_] := Block[{selected},
+selected = Select[integrands, (MatchQ[#[[1]], v[x_]] || MatchQ[#[[1]],Subscript[w,i_][x_]])&];
+selected = selected /. {Subscript[zs,1] -> (0&), Subscript[zp,1] -> (0&), zs-> (1&), zp-> (1&), t-> (0&), \[Eta]->0};
 
-Approximate[func_]:= Block[{approx},
-	If[MatchQ[func[[1]], f_[0]],
-		Return[Null];];
-	If[MatchQ[func[[1]], f_[\[Rho]/eps]],
-		approx = func/.LPArep;
-		If[approx[[1]] == 1, approx[[1]] = Z];
-		Return[approx];
-		];
-	Return[func];
+Return[selected];
 ];
-Return[DeleteCases[Map[Approximate,integrands],Null]];
+
+
+(* ::Text:: *)
+(*Returns integrands in LPA' approximation*)
+
+
+MakeLPAp[integrands_] := Block[{selected},
+
+selected = Select[integrandsListAnisotropic, (MatchQ[#[[1]], v[x_]] || MatchQ[#[[1]],Subscript[w,i_][x_]] || MatchQ[#[[1]],zs[x_]])&];
+selected[[All,2;;4]] = selected[[All,2;;4]] /. {Subscript[zs,1] -> (0&), Subscript[zp,1] -> (0&), zs-> (1&), zp-> (1&), t-> (0&)};
+selected = selected /. zs[\[Rho]/eps] -> Z;
+
+Return[selected];
 ];
 
 
@@ -629,7 +622,7 @@ Return[newGuess];
 
 
 LPAGuess[guess_] := Block[{},
-Return[Join[guess[[1;;gridSize+1]],{\[Eta]->(\[Eta]/.guess)}]]];
+Return[guess[[1;;gridSize+1]]]];
 
 
 (* ::Subsubsection::Closed:: *)
@@ -637,7 +630,7 @@ Return[Join[guess[[1;;gridSize+1]],{\[Eta]->(\[Eta]/.guess)}]]];
 
 
 LPApGuess[guess_] := Block[{},
-Return[Join[guess[[1;;gridSize+1]],{Y->yy[zNormalization]/.guess,\[Eta]->(\[Eta]/.guess)}]]];
+Return[Join[guess[[1;;gridSize+1]],{\[Eta]->(\[Eta]/.guess)}]]];
 
 
 (* ::Subsubsection::Closed:: *)
@@ -1217,7 +1210,7 @@ Return[criticalExponents];
 ];
 
 
-(* ::Subsubsection:: *)
+(* ::Subsubsection::Closed:: *)
 (*GetCriticalExponents*)
 
 

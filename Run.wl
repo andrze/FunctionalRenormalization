@@ -17,7 +17,7 @@ $HistoryLength = 10;
 
 arguments = $CommandLine;
 If[MemberQ[$CommandLine,"-script"], debug = False, debug = True];
-SetAttributes[debug,Protected];
+SetAttributes[debug, Protected];
 
 If[debug,
 	SetDirectory["/home/andrzej/FunctionalRenormalization"];
@@ -43,11 +43,11 @@ If[debug,
 	configuration = 24;
 	ON = True;
 	regulatorName = "smooth";
-	strict=False;
-	LPA = False,
+	strict = False;
+	derivativeExpansionOrder = "LPA",
 	
 	(* Release run configuration *)
-	LPA = False;
+	derivativeExpansionOrder = "DE2";
 	task = Null;
 	anisotropySymmetry = 4;
 	regulatorName = Null;
@@ -58,7 +58,7 @@ If[debug,
 		If[arguments[[i]] == "-task", task = arguments[[i+1]]];
 		If[arguments[[i]] == "-regulator", regulatorName = arguments[[i+1]]];
 		If[arguments[[i]] == "-conf", configuration = ToExpression[arguments[[i+1]]]];
-		If[arguments[[i]] == "LPA", LPA = True];
+		If[MemberQ[{"LPA","LPA'"}, arguments[[i]]], derivativeExpansionOrder = arguments[[i]]];
 		If[arguments[[i]] == "strict", strict = True];
 		];
 	];
@@ -88,7 +88,7 @@ potentialMinimum = Lookup[potentialMinimumDict,task,Floor[1/2*gridSize]];
 
 (* Set z-normalization point *)
 
-If[LPA,
+If[derivativeExpansionOrder == "LPA'",
 	zNormalization = Floor[5*gridSize/6],
 	zNormalization = 0];
 
@@ -135,8 +135,8 @@ Get["FixedPoint.wl"];
 (* Select regulator function *)
 SelectRegulator[regulatorName];
 If[strict,
-	cacheDirectory = GetCacheDirectory[task, 0, regulatorName, LPA, "strict"],
-	cacheDirectory = GetCacheDirectory[task, 0, regulatorName, LPA]];
+	cacheDirectory = GetCacheDirectory[task, 0, regulatorName, derivativeExpansionOrder, "strict"],
+	cacheDirectory = GetCacheDirectory[task, 0, regulatorName, derivativeExpansionOrder]];
 
 
 
@@ -153,7 +153,8 @@ If[strict,
 	isotropicEquationsFile = GetEquationsFileName[task, 0, 0];];
 If[FileExistsQ[isotropicEquationsFile], 
 	integrandsListIsotropic = Import[isotropicEquationsFile];
-	If[LPA, integrandsListIsotropic= MakeLPA[integrandsListIsotropic];],
+	If[derivativeExpansionOrder=="LPA", integrandsListIsotropic= MakeLPA[integrandsListIsotropic];];
+	If[derivativeExpansionOrder=="LPA'", integrandsListIsotropic= MakeLPAp[integrandsListIsotropic];],
 	Print["No isotropic equations found"]; Quit[]];
 If[ON,
 	integrandsListAnisotropic = {},
@@ -164,7 +165,8 @@ If[ON,
 	If[FileExistsQ[anisotropicEquationsFile], 
 		integrandsListAnisotropic = Import[anisotropicEquationsFile],
 		Print["No anisotropic equations found"]; Quit[]];
-	If[LPA, integrandsListAnisotropic= MakeLPA[integrandsListAnisotropic];]
+	If[derivativeExpansionOrder=="LPA", integrandsListAnisotropic= MakeLPA[integrandsListAnisotropic];];
+	If[derivativeExpansionOrder=="LPA'", integrandsListAnisotropic= MakeLPAp[integrandsListAnisotropic];];
 ];
 
 
@@ -556,14 +558,15 @@ Map[PlotDimDependence, Keys[allExponents]];
 (*Z4-symmetric anisotropy*)
 
 
-(* ::Subsection::Closed:: *)
+(* ::Subsection:: *)
 (*Z4 - anisotropy dimension dependence*)
 
 
 If[ task == "Z4",
 {guess, dim, \[Rho]Max} = Import[guessfile];
 guess = AdjustNumberOfPoints[guess, gridSize,zNormalization,\[Rho]Max];
-If[LPA,guess = LPApGuess[guess];];
+If[derivativeExpansionOrder == "LPA", guess = LPAGuess[guess];];
+If[derivativeExpansionOrder == "LPA'", guess = LPApGuess[guess];];
 
 configurations = Import[runconf];
 
@@ -670,7 +673,7 @@ Export[cacheDirectory<>FIXEDPOINTSFILE,{allFPs,allExponents}];
 ];
 
 
-(* ::Subsection::Closed:: *)
+(* ::Subsection:: *)
 (*Z4 - anisotropy plotting regulator dependence*)
 
 
@@ -2246,6 +2249,8 @@ Length[]
 
 
 guess = 
+
+
 
 
 (* ::Subsection:: *)

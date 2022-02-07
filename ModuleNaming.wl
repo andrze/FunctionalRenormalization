@@ -15,10 +15,10 @@ GetEquationsFileName[task_, fieldOrder_, anisotropyOrder_, comment_:""] :=
 			".wdx"}]];
 
 
-GetCacheDirectory[task_, fieldOrder_, regulatorName_, LPA_:False, comment_:""] :=
+GetCacheDirectory[task_, fieldOrder_, regulatorName_, derivativeExpansionOrder_:"DE2", comment_:""] :=
 Block[{directoryName,dirPrefix=task,sufix=""},
 If[task=="regulator", dirPrefix="ON"];
-If[LPA, sufix="_LPA"];
+If[derivativeExpansionOrder!="DE2", sufix="_"<>derivativeExpansionOrder];
 If[comment!="", sufix="_"<>ToString[comment]];
 
 directoryName = StringJoin[{dirPrefix,"_", 
