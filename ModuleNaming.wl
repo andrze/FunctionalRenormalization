@@ -37,9 +37,11 @@ FIXEDPOINTSFILES[i_] := "fixed_points"<>ToString[i]<>".wdx";
 DIMENSIONDEPENDENCEFILE = "dimension_dependence.wdx";
 REGULATORDEPENDENCEFILE = "regulator_dependence.wdx";
 ONRUNCONF = "on_run_configuration.wdx";
+ISINGRUNCONF = "ising_run_configuration.wdx";
+ISING2RUNCONF = "ising2_run_configuration.wdx";
 Z4RUNCONF = "z4_run_configuration.wdx";
 LOWDRUNCONF = "lowd_run_conf.wdx";
 TRICRITICALRUNCONF = "tricrit_run_configuration.wdx";
 
 
-ONTASKS = {"ON","tricritical","lowd","regulator"};
+ONTASKS = {"ON","tricritical","lowd","regulator","ising","ising2"};
