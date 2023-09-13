@@ -130,7 +130,7 @@ Export[TRICRITICALRUNCONF, configurations];
 Print[Length[configurations]];
 
 
-(* ::Subsubsection:: *)
+(* ::Subsubsection::Closed:: *)
 (*Ising run configurations*)
 
 
@@ -140,7 +140,7 @@ Export[ISINGRUNCONF, configurations];
 Print[Length[configurations]];
 
 
-(* ::Subsubsection:: *)
+(* ::Subsubsection::Closed:: *)
 (*Ising2 run configurations*)
 
 
@@ -174,11 +174,11 @@ configurations = Tuples[{keys,constants}];
 Export[ONRUNCONF, {keyLabels, configurations}];
 Print[Length[configurations]];*)
 (*configurations = Table[Association["alpha"->2.,"\[Rho]Max"->0.15, "N"->1+i/2.],{i,0,6}];*)
-ns = Join[1+ Range[0,10]/10,{5/2,3}];
-configurations = Flatten[Table[Association["alpha"->1+ j/2, "N"->ns[[i]]],{i,1,Length[ns]},{j,0,6}]];
+ns = Join[1+ Range[1,10]/10,{5/2,3}];
+configurations = Flatten[Table[Association["alpha"->1/3+ j/6, "N"->ns[[i]]],{i,1,Length[ns]},{j,0,14}]];
 
-Export[ONRUNCONF, configurations];
 Print[Length[configurations]];
+Export[ONRUNCONF, configurations];
 
 
 (* ::Subsubsection::Closed:: *)
@@ -228,8 +228,8 @@ Export[LOWDRUNCONF, {keyLabels,configurations}];
 (*Z4 run configurations*)
 
 
-dims = {2,201/100,205/100,21/10,215/100,22/10,225/100,23/10,24/10,25/10,275/100,3};
-alphas = Join[Range[1,15]/10, Range[8,20]/5];
+dims = Reverse[{2,201/100,202/100,203/100,205/100,21/10,215/100,2175/1000,22/10,2225/1000,225/100,23/10,24/10,25/10, 26/10,275/100,3}];
+alphas = Range[3,30]/5;
 configurations = Map[Association["dim"->#[[1]],"alpha"->#[[2]]]&,Tuples[{dims,alphas}]];
 Export[Z4RUNCONF, configurations];
 Print[Length[configurations]];
@@ -237,4 +237,4 @@ Print[Length[configurations]];
 
 (*configurations = Table[Association["alpha"->i*0.1],{i,4,60}];
 Export[Z4RUNCONF, configurations];
-Print[Length[configurations]];)*
+Print[Length[configurations]];*)
