@@ -4,7 +4,7 @@
 (*Numerical Library*)
 
 
-(* ::Subsection:: *)
+(* ::Subsection::Closed:: *)
 (*Constants*)
 
 
@@ -27,9 +27,10 @@ Protect[potentialMinimum];
 
 Unprotect[IntegralConfigurations];
 IntegralConfigurations = 
-{{0,1/10,20}, 
-{1/10,3,30},
-{3,6,15}};
+{{0,1/10,20},
+{1/10,1,20}, 
+{1,4,30},
+{4,7,15}};
 Protect[IntegralConfigurations];
 
 
@@ -43,6 +44,9 @@ If[!NumberQ[zNormalization],
 		zNormalization = 0];
 ];	
 SetAttributes[zNormalization,{Protected,Constant}];
+
+
+StandardPlotColours = ColorData[97,"ColorList"];
 
 
 (* ::Subsection:: *)
@@ -76,13 +80,26 @@ SemiBackwardCoefficients[n_] := Piecewise[{{-SemiForwardCoefficients[n],OddQ[n]}
 
 
 (* ::Input:: *)
-(*(*n=5;*)
-(*d=2;*)
-(*rep = s[j_]\[Rule]j-1;*)
-(*stencil = Table[s[j],{j,1,n}]/. rep*)
+(*GetDerCoefs[n_, d_, shift_]:= Block[{rep, stencil, mat, vec, MyCForm, pos, declaration,half},*)
+(*rep = s[j_]->j-shift;*)
+(*stencil = Table[s[j],{j,1,n}]/. rep;*)
 (*mat = Table[s[j]^i,{i,0,n-1},{j,1,n}]/.rep;*)
 (*vec = d! Table[KroneckerDelta[d,i],{i,0,n-1}];*)
-(*Inverse[mat].vec*)*)
+(**)
+(*half = Floor[n/2];*)
+(*If[shift == half+1, pos = "CENTRAL",*)
+(*pos = "BORDER";*)
+(*Map[(pos= "SEMI"<>pos)&, Range[shift-1]];*)
+(*];*)
+(*declaration = "const std::vector<PhysicalDouble> DER"<>ToString[d]<>"_"<> pos <>"_COEFFICIENTS = ";*)
+(**)
+(*MyCForm[f_] := ToString[Numerator[f]]<>".l/"<>ToString[Denominator[f]];*)
+(*Print[declaration<>ToString[Map[MyCForm,Inverse[mat] . vec]]<>";"]*)
+(*];*)
+
+
+npoints = 9; maxshift = Floor[npoints/2]+1; maxder = 4;
+(*MapApply[GetDerCoefs, Tuples[{{npoints}, Range[maxder], Range[maxshift]}]];*)
 
 
 (* ::Subsubsection::Closed:: *)
@@ -144,7 +161,7 @@ Derivative],
 MultilineFunction->None]\)[0]->(56 f[0]-333 f[1]+852 f[2]-1219 f[3]+1056 f[4]-555 f[5]+164 f[6]-21 f[7])/6];
 
 
-(* ::Subsubsection:: *)
+(* ::Subsubsection::Closed:: *)
 (*Shortcuts for replacement*)
 
 
@@ -354,7 +371,7 @@ AppendToCache[directory_, filename_, data_]:= Block[{cachefile, cache={}, newCac
 
 
 (* ::Subsubsection::Closed:: *)
-(*Transpose Association*)
+(*TransposeAssociation*)
 
 
 (* ::Text:: *)
@@ -365,7 +382,7 @@ TransposeAssociation[association_] :=
 Block[{i, j, transposed, primaryKeys, pk, secondaryKeys, sk},
 transposed = Association[];
 secondaryKeys = Keys[association];
-primaryKeys = Sort[DeleteDuplicates[Flatten[Values[Map[Keys,association]]]],#1>#2&];
+primaryKeys = Sort[DeleteDuplicates[Flatten[Values[Map[Keys,association]],1]],#1>#2&];
 For[i=1, i<=Length[primaryKeys], i++,
 	pk = primaryKeys[[i]];
 	transposed[pk] = Association[];
@@ -703,8 +720,8 @@ ListPlot[functions, PlotLegends->{"V",Subscript["Z","\[Sigma]"],Subscript["Z","\
 (*Finds a fixed point for provided equations*)
 
 
-FindFixedPoint[eqlist_, guess_, constants_, jacobian_:{}]:=
-Block[{solution, eqlistSubstituted, plot, check, guessrep, jacobianRep},
+FindFixedPoint[eqlist_, guess_, constants_]:=
+Block[{solution, eqlistSubstituted, plot, check, guessrep},
 FindFixedPoint::singularEq = "Flow equations singular due to too small regulator prefactor";
 
 If[(\[Alpha] /.constants) < -(v[0]/.guess),
@@ -717,15 +734,10 @@ If[(\[Alpha] /.constants) < -(v[0]/.guess),
 	guessrep = Table[{guess[[i,1]], guess[[i,2]]}, {i,1,Length[guess]}];
 
 	(* Finds numerical solution *)
-	If[Length[jacobian]==0,
-		solution = Quiet[FindRoot[eqlistSubstituted, guessrep,
-						PrecisionGoal->8,WorkingPrecision->24,AccuracyGoal->8,MaxIterations->100],
-					{FindRoot::lstol}],
-		jacobianRep = jacobian /. constants;			
-		solution = Quiet[FindRoot[eqlistSubstituted, guessrep,
-						PrecisionGoal->8,WorkingPrecision->24,AccuracyGoal->8,MaxIterations->100, Jacobian->jacobianRep],
+	
+	solution = Quiet[FindRoot[eqlistSubstituted, guessrep,
+					PrecisionGoal->16,WorkingPrecision->30,AccuracyGoal->12,MaxIterations->100],
 					{FindRoot::lstol}];
-			];
 	
 	Return[solution];
 ];
@@ -850,7 +862,7 @@ Return[Association["Minima"->min, "Maxima"->max]];
 (*On approaching inproper FPs (see IsWIlsonFisher function) it discards it, but does not stop the iterations. Iterations are stopped after 5 consecutive errors.*)
 
 
-\[Rho]MaxScan[equations_, initialFixedPoint_, dim_, initial\[Rho]Max_, alpha_, \[Rho]Increment_, maxIterations_, jacobian_:{}] := Block[
+\[Rho]MaxScan[equations_, initialFixedPoint_, dim_, initial\[Rho]Max_, alpha_, \[Rho]Increment_, maxIterations_] := Block[
 {d\[Rho]=0, min, j, newFixedPoint, fixedPoints, fail, fpMsg, errorMsg,
  targetMinimumPosition=potentialMinimum, FPCheck=IsWilsonFisher, guess = initialFixedPoint, \[Rho]Max=initial\[Rho]Max},
 
@@ -862,7 +874,7 @@ errorMsg[d_, \[Rho]_] := "Error during calculation of a Fixed Point at d="<>ToSt
 For[j=0, j<maxIterations, j++,
 	fail=False;
 	Check[
-		newFixedPoint = FindFixedPoint[equations, guess, ConstRep[dim, \[Rho]Max, alpha], jacobian],
+		newFixedPoint = FindFixedPoint[equations, guess, ConstRep[dim, \[Rho]Max, alpha]],
 		fail = True;
 		];
 		
@@ -956,20 +968,20 @@ Return[fixedPointDict];
 (*The structure of outcome is like  (Replacement list FP) = dict[dimension][\[Rho]Max]*)
 
 
-FixedPointDimScan[eqlist_, jacobian_, guess_, constants_, d_, initial\[Rho]Max_, maxSteps_:1000] := 
+FixedPointDimScan[eqlist_, guess_, constants_, d_, initial\[Rho]Max_, maxSteps_:1000] := 
 Block[{fixedPointDict=Association[], newGuess=guess, scan,
-	\[Rho]Max=initial\[Rho]Max, step=1/20, steps=0, dim=d, factor=101/100, maxFactor = 1.05, minFactor = 0.95},
+	\[Rho]Max=initial\[Rho]Max, step=1/20, steps=0, dim=d, factor=101/100, maxFactor = 105/100, minFactor = 95/100},
 If[searchTricritical,
 	Print["Searching for tricritical fixed points"],
 	Print["Searching for critical fixed points"]];
 
 For[steps=0, steps < maxSteps && dim > 1, steps++,
 	
-	scan = \[Rho]MaxScan[eqlist, newGuess, dim, \[Rho]Max*factor, constants["alpha"], \[Rho]Max/20, 30,  jacobian];
+	scan = \[Rho]MaxScan[eqlist, newGuess, dim, \[Rho]Max*factor, constants["alpha"], \[Rho]Max/20, 30];
 	
 	If[Length[scan]<2 || !IsFixedPoint[eqlist, scan[[1]], ConstRep[dim, scan[[2]], constants["alpha"]]], 
 		Print["No FP found for d="<> ToString[N[dim]]];
-		If[step >= 5 10^-3,
+		If[step >= 2 10^-3,
 			step /= 2;
 			dim += step;
 			Continue[],
@@ -1075,7 +1087,7 @@ Return[{fixedPointDict, TransposeAssociation[expDict]}];
 (*Stability Matrix*)
 
 
-(* ::Subsubsection::Closed:: *)
+(* ::Subsubsection:: *)
 (*Stability Matrix*)
 
 
@@ -1097,12 +1109,12 @@ params = DeleteCases[params, zs[zNormalization]];
 params = DeleteCases[params, Z];
 
 (* Fixed Point replacement including only free parameters and cutoff for expansion in anisotropic field *)
-fixedPointRep = Table[params[[i]]->(params[[i]] /. {t[0]->NumericDerivatives[zs'[0]-zp'[0]] /(4 eps)}/. {t[k_] -> (zs[k]-zp[k])/(4 k eps)} /. fixedPoint /. 
+fixedPointRep = Table[params[[i]]->(params[[i]] /. {t[0]->NumericDerivatives[zs'[0]-zp'[0]] /(2 eps)}/. {t[k_] -> (zs[k]-zp[k])/(2 k eps)} /. fixedPoint /. 
 {Subscript[f_, j_][k_] -> 0}/. constants ),
 		{i,1,Length[params]}];
 AppendTo[fixedPointRep, Subscript[f_, ii_][jj_]->0];
 If[!MemberQ[params,t[0]],
-	AppendTo[fixedPointRep, t[0]->(NumericDerivatives[zs'[0]-zp'[0]] /(4eps)/. fixedPoint/. constants)];
+	AppendTo[fixedPointRep, t[0]->(NumericDerivatives[zs'[0]-zp'[0]] /(2eps)/. fixedPoint/. constants)];
 ];
 
 (* Gradient operator in model parameter space *)
@@ -1189,7 +1201,7 @@ If[!MatrixQ[mat,NumberQ],
 	];
 eigenVals = Eigenvalues[mat,-10];
 (*Return[Re[eigenSys]]];*)
-eigenVals = Sort[eigenVals,Re[#1]<Re[#2]&];
+eigenVals = Sort[eigenVals, Re[#1]<Re[#2]||(Re[#1]==Re[#2] && Im[#1]<Im[#2])&];
 Return[eigenVals]];
 (*Return[Re[Sort[Select[eigenSys, Abs[Im[#[[1]]]]<0.00001 &]]]]]*)
 
