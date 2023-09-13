@@ -3,9 +3,10 @@ from sys import argv
 
 mathematica_path = "/opt/Wolfram/Mathematica/12.0.0/Executables/math"
 time = {"ising" : 48,
-        "Z4" : 60}
+        "Z4" : 120,
+        "ON" : 240}
 
-def run(mode, regulator, num_conf, additional=""):
+def run(mode, regulator, num_conf, additional="", start_index=1):
 
     tasks = ("tricritical","Z4", "ON", "lowd", "regulator", "ising", "ising2")
     if mode not in tasks:
@@ -17,9 +18,9 @@ def run(mode, regulator, num_conf, additional=""):
     
     memory = 8000
     if mode=="ON":
-        memory = 16000
+        memory = 24000
     
-    for i in range(1,num_conf+1):
+    for i in range(start_index,num_conf+1):
         if num_conf < 1000:
             filename = "%s%03i.sh" % (mode,i)
         else:
@@ -39,7 +40,9 @@ def run(mode, regulator, num_conf, additional=""):
 
 if len(argv) == 4:
     run(argv[1],argv[2],int(argv[3]))
-elif len(argv) > 4:
+elif len(argv) == 5:
     run(argv[1],argv[2],int(argv[3]),argv[4])
+elif len(argv) > 5:
+    run(argv[1],argv[2],int(argv[3]),argv[4], int(argv[5]))
 
 
